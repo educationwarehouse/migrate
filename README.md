@@ -1,2 +1,2 @@
 # migrate
-Migrate datagbase changes
+Migrate database changes
