@@ -13,8 +13,7 @@ When writing new tasks, make sure:
    forget and fail...
 
 """
-
-
+import contextlib
 import datetime
 import os
 import sys
@@ -49,6 +48,13 @@ class RequimentsNotMet(BaseException):
     pass
 
 
+class MigrateLockExists(Exception):
+    pass
+
+class MigrationFailed(Exception):
+    pass
+
+
 def setup_db(
         migrate=False,
         migrate_enabled=False,
@@ -62,13 +68,14 @@ def setup_db(
         dal_class = DAL
 
     try:
-        uri = os.environ["POSTGRES_URI"]
+        uri = os.environ["MIGRATE_URI"]
     except KeyError as e:
-        raise InvalidConfigException("$POSTGRES_URI not found in environment.") from e
+        raise InvalidConfigException("$MIGRATE_URI not found in environment.") from e
+    is_postgres = uri.startswith('postgres')
     driver_args = dict(
         application_name=appname,
-    )
-    if not long_running:
+    ) if is_postgres else {}
+    if not long_running and is_postgres:
         driver_args["keepalives"] = 1
     db = dal_class(
         uri,
@@ -77,7 +84,7 @@ def setup_db(
         driver_args=driver_args,
         pool_size=1,
     )
-    if not long_running:
+    if is_postgres and not long_running:
         db.executesql("PGPOOL SET client_idle_limit = 10;")
     # https://www.pgpool.net/docs/latest/en/html/sql-pgpool-set.html
     # make this connection able to live longer, because the functions can take over 30s
@@ -220,7 +227,7 @@ def recover_database_from_backup():
 
     # parse the db uri to find hostname and port and such to
     # feed to pqsl as commandline arguments
-    uri = urllib.parse.urlparse(os.environ["POSTGRES_URI"])
+    uri = urllib.parse.urlparse(os.environ["MIGRATE_URI"])
     database = str(uri.path).lstrip("/")
     netloc = str(uri.netloc)
     if "@" in netloc:
@@ -365,35 +372,79 @@ def activate_migrations():
     return all(successes)
 
 
+@contextlib.contextmanager
+def schema_versioned_lock_file():
+    """
+    Context manager that creates a lock file for the current schema version.
+    """
+    if (schema_version := os.getenv("SCHEMA_VERSION")) is None:
+        print('No schema version found, ignoring any lock files.')
+        yield
+    else:
+        print("testing migrate lock file with the current version")
+        lock_file = Path(f'/flags/migrate-{schema_version}.complete')
+        print("Using lock file: ", lock_file)
+        if lock_file.exists():
+            print(
+                "migrate: lock file already exists, migration should be completed. Aborting migration"
+            )
+            raise MigrateLockExists(str(lock_file))
+        else:
+            # create the lock asap, to avoid racing conditions with other possible migration processes
+            lock_file.touch()
+            try:
+                yield
+            except MigrationFailed:
+                # remove the lock file, so that the migration can be retried.
+                print("ERROR: migration failed, removing the lock file.\n"
+                      "Check the ewh_implemented_features table for details.")
+                lock_file.unlink()
+
+            except BaseExceptionGroup:
+                # since another exception was raised, reraise it for the stack trace.
+                lock_file.unlink()
+                raise
+
+
 def console_hook():
     """
     Activated by migrate shell script, sets a lock file before activate_migrations.
 
     lockfile: '/flags/migrate-{os.environ["SCHEMA_VERSION"]}.complete'
     """
-    print("testing migrate lock file with the current version")
     # get the versioned lock file path, as the config performs the environment variable expansion
-    lock_file = Path(f'/flags/migrate-{os.environ["SCHEMA_VERSION"]}.complete')
-    print("Using lock file: ", lock_file)
-    if lock_file.exists():
-        print(
-            "migrate: lock file already exists, migration should be completed. Aborting migration"
-        )
-        return
 
-    if Path('migrations.py').exists():
-        print("migrations.py exists, importing @migration decorated functions.")
-        sys.path.insert(0, os.getcwd())
-        import migrations
+    if '-h' in sys.argv or '--help' in sys.argv:
+        print('''
+        Execute migrate to run the migration in `migrations.py` from the current working directory. 
+        
+        The database connection url is read from the MIGRATE_URI environment variable. It should be a 
+        pydal compatible connection string. 
+        
+        
+        ## Testing migrations using sqlite
+        
+        Create a test setup using sqlite3: 
+        $sqlite3 test.db  "create table ewh_implemented_features(id, name, installed, last_update_dttm);"
+        $export MIGRATE_URI='sqlite://test.db'
+        
+        ''')
+        exit(0)
 
+    with contextlib.suppress(MigrateLockExists):
+        with schema_versioned_lock_file():
+            if Path('migrations.py').exists():
+                print("migrations.py exists, importing @migration decorated functions.")
+                sys.path.insert(0, os.getcwd())
+                # importing the migrations.py file will register the functions
+                import migrations
+                print(f'{len(registered_functions)} migrations discovered')
 
-    print("starting migrate hook")
-    if activate_migrations():
-        print("migration completed successfully, writing lock file", lock_file)
-        lock_file.touch()
-    else:
-        print("ERROR: migration failed, not writing a lock file ")
-
+            print("starting migrate hook")
+            if activate_migrations():
+                print("migration completed successfully, marking success.")
+            else:
+                raise MigrationFailed('Not every migration succeeded.')
 
 # ------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------

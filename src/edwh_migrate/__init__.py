@@ -13,7 +13,7 @@ When writing new tasks, make sure:
    forget and fail...
 
 """
-from migrate import registered_functions, migration, setup_db, UnknownConfigException, recover_database_from_backup, \
+from .migrate import registered_functions, migration, setup_db, UnknownConfigException, recover_database_from_backup, \
     InvalidConfigException, activate_migrations
 
 __all__ = [
