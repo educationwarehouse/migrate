@@ -116,18 +116,18 @@ def test_dummy_is_not_migrated_twice(tmp_just_implemented_features_sqlite_db_fil
     assert rs.first().installed is True, "the row should be marked as installed in the database"
 
 
-def test_dependencies(clean_migrate, tmp_just_implemented_features_sqlite_db_file, capsys):
+@pytest.mark.parametrize("scenario", ['as_list', 'as_function'])
+def test_dependencies(clean_migrate, tmp_just_implemented_features_sqlite_db_file, capsys, scenario):
     @migrate.migration
     def required(db):
         return True
-
 
     print(migrate.registered_functions)
     assert len(migrate.registered_functions) == 1
     result = migrate.activate_migrations()
     assert result is True, "the required migration returning True should have been marked as successful"
 
-    @migrate.migration(requires=required)
+    @migrate.migration(requires=required if scenario == 'as_function' else [required])
     def dependent(db):
         return True
 
@@ -142,15 +142,15 @@ def test_dependencies(clean_migrate, tmp_just_implemented_features_sqlite_db_fil
     assert db(db.ewh_implemented_features.installed == True).count() == 2, "exactly two rows should be marked installed"
 
 
-def test_dependency_function_notation_failure(clean_migrate, tmp_just_implemented_features_sqlite_db_file, capsys):
+@pytest.mark.parametrize("scenario", ['as_list', 'as_function'])
+def test_dependency_failure(clean_migrate, tmp_just_implemented_features_sqlite_db_file, capsys, scenario):
     @migrate.migration
     def required(db):
         return False
 
-    @migrate.migration(requires=required)
+    @migrate.migration(requires=required if scenario == 'as_function' else [required])
     def dependent(db):
         return True
-
 
     assert len(migrate.registered_functions) == 2
     with pytest.raises(migrate.RequimentsNotMet):
@@ -160,21 +160,3 @@ def test_dependency_function_notation_failure(clean_migrate, tmp_just_implemente
     assert db(db.ewh_implemented_features.installed == True).count() == 0, "requirement failed, no succes possible"
     assert db(db.ewh_implemented_features.installed == False).count() == 1, "because of the exception, `dependent` is never written to the database. "
 
-
-def test_dependency_list_notation_failure(clean_migrate, tmp_just_implemented_features_sqlite_db_file, capsys):
-    @migrate.migration
-    def required(db):
-        return False
-
-    @migrate.migration(requires=[required])
-    def dependent(db):
-        return True
-
-
-    assert len(migrate.registered_functions) == 2
-    with pytest.raises(migrate.RequimentsNotMet):
-        migrate.activate_migrations()
-    db = migrate.setup_db()
-    dump_db(db, echo=True)
-    assert db(db.ewh_implemented_features.installed == True).count() == 0, "requirement failed, no succes possible"
-    assert db(db.ewh_implemented_features.installed == False).count() == 1, "because of the exception, `dependent` is never written to the database. "
