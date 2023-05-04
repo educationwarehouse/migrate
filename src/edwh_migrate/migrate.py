@@ -449,6 +449,7 @@ def console_hook():
         with schema_versioned_lock_file():
             arg = None
             if sys.argv[1:]:
+                print(f'Using argument {sys.argv[1]} as a reference to the migrations file.')
                 # use the first argument as a reference to the migrations file
                 # or the folder where the migrations file is stored
                 arg = pathlib.Path(sys.argv[1])
@@ -470,11 +471,11 @@ def console_hook():
                 sys.path.insert(0, os.getcwd())
                 # importing the migrations.py file will register the functions
                 import migrations
-                print(f'{len(registered_functions)} migrations discovered')
             else:
                 print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
                 exit(1)
             print("starting migrate hook")
+            print(f'{len(registered_functions)} migrations discovered')
             if activate_migrations():
                 print("migration completed successfully, marking success.")
             else:
