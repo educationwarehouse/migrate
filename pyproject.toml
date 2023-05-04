@@ -27,13 +27,21 @@ dependencies = [
   'psycopg2-binary',
   'redis',
 ]
+
+[project.optional-dependencies]
+dev = [
+    "hatch",
+    "python-semantic-release",
+    "black",
+]
+
 [project.scripts]
 migrate = "edwh_migrate.migrate:console_hook"
 
 [project.urls]
-Documentation = "https://github.com/unknown/-#readme"
-Issues = "https://github.com/unknown/-/issues"
-Source = "https://github.com/unknown/-"
+Documentation = "https://github.com/educationwarehouse/migrate#readme"
+Issues = "https://github.com/educationwarehouse/migrate/issues"
+Source = "https://github.com/educationwarehouse/migrate"
 
 [tool.semantic_release]
 branch = "main"
