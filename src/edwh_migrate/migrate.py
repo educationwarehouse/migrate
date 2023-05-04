@@ -15,6 +15,7 @@ When writing new tasks, make sure:
 """
 import contextlib
 import datetime
+import importlib
 import os
 import pathlib
 import sqlite3
@@ -446,13 +447,33 @@ def console_hook():
 
     with contextlib.suppress(MigrateLockExists):
         with schema_versioned_lock_file():
-            if Path('migrations.py').exists():
+            arg = None
+            if sys.argv[1:]:
+                # use the first argument as a reference to the migrations file
+                # or the folder where the migrations file is stored
+                arg = pathlib.Path(sys.argv[1])
+                if arg.exists() and arg.is_file():
+                    print(f"importing migrations from {arg}")
+                    sys.path.insert(0, str(arg.parent))
+                    # importing the migrations.py file will register the functions
+                    importlib.import_module(arg.stem)
+                elif arg.exists() and arg.is_dir():
+                    print(f"importing migrations from {arg}/migrations.py")
+                    sys.path.insert(0, str(arg))
+                    # importing the migrations.py file will register the functions
+                    importlib.import_module('migrations')
+                else:
+                    print(f"ERROR: no migrations found at {arg}", file=sys.stderr)
+                    exit(1)
+            elif Path('migrations.py').exists():
                 print("migrations.py exists, importing @migration decorated functions.")
                 sys.path.insert(0, os.getcwd())
                 # importing the migrations.py file will register the functions
                 import migrations
                 print(f'{len(registered_functions)} migrations discovered')
-
+            else:
+                print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
+                exit(1)
             print("starting migrate hook")
             if activate_migrations():
                 print("migration completed successfully, marking success.")
