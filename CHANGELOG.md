@@ -2,6 +2,13 @@
 
 <!--next-version-placeholder-->
 
+## v0.3.0 (2023-05-04)
+### Feature
+* Failed tests will sometimes be written to db; better support for sqlite; better unpacker code, better docs, more translation into english ([`7701670`](https://github.com/educationwarehouse/migrate/commit/7701670b8e4adc234a2ae8abeac8780adda65330))
+
+### Documentation
+* **env:** Environment variables documented ([`71950c2`](https://github.com/educationwarehouse/migrate/commit/71950c20d6dbed59892192b7344dafd109131e9f))
+
 ## v0.2.0 (2023-04-22)
 ### Feature
 * Sqlite3 is now a possible alternative; the schema lockfile mechanism is now optional. ([`8e1baa8`](https://github.com/educationwarehouse/migrate/commit/8e1baa8afe640234b36587fff2d2d6a0774fde63))
