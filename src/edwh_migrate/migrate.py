@@ -414,7 +414,7 @@ def schema_versioned_lock_file():
                       "Check the ewh_implemented_features table for details.")
                 lock_file.unlink()
 
-            except BaseExceptionGroup:
+            except Exception:
                 # since another exception was raised, reraise it for the stack trace.
                 lock_file.unlink()
                 raise
