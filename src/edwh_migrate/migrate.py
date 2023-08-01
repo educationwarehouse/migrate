@@ -250,7 +250,7 @@ def recover_database_from_backup():
 
     if  uri.scheme.startswith("postgres"):
         # prepare the psql command
-        psql = plumbum.local["psql"][uri]
+        psql = plumbum.local["psql"][os.environ["MIGRATE_URI"]]
         sql_consumer = psql
     else:
         sqlite_database_path = pathlib.Path(uri.netloc) / pathlib.Path(uri.path.strip('/'))
