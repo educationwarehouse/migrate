@@ -112,14 +112,15 @@ def setup_db(
         driver_args=driver_args,
         pool_size=1,
     )
-    if is_postgres and not long_running:
+    if is_postgres and long_running:
         # https://www.pgpool.net/docs/latest/en/html/sql-pgpool-set.html
         # make this connection able to live longer, because the functions can take over 30s
         # to perform the job.
         # db.executesql("PGPOOL SET client_idle_limit = 3600;")
         with contextlib.suppress(Exception):
+            print('Setting up for long running connection')
             db.executesql(f"PGPOOL SET client_idle_limit = {long_running if str(long_running).isdigit() else 3600};")
-
+            db.rollback()
     db.define_table(
         "ewh_implemented_features",
         Field("name", unique=True),
@@ -129,9 +130,11 @@ def setup_db(
     try:
         db(db.ewh_implemented_features).count()
     except (psycopg2.errors.UndefinedTable, sqlite3.OperationalError) as e:
+        db.rollback()
         raise DatabaseNotYetInitialized(
             "ewh_implemented_features is missing.", db
         ) from e
+
     return db
 
 
