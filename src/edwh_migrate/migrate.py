@@ -247,34 +247,10 @@ def recover_database_from_backup():
     # parse the db uri to find hostname and port and such to
     # feed to pqsl as commandline arguments
     uri = urllib.parse.urlparse(os.environ["MIGRATE_URI"])
-    is_postgres = uri.scheme.startswith("postgres")
-    database = str(uri.path).lstrip("/")
-    netloc = str(uri.netloc)
-    if "@" in netloc:
-        username_password, hostname_port = netloc.split("@")
-    else:
-        username_password = "postgres"
-        hostname_port = netloc
-    if ":" in username_password:
-        username, password = username_password.split(":")
-    else:
-        username = username_password
-        password = None
-    if ":" in hostname_port:
-        hostname, port = hostname_port.split(":")
-    else:
-        hostname = hostname_port
-        port = "5432"
 
-    if is_postgres:
+    if  uri.scheme.startswith("postgres"):
         # prepare the psql command
-        psql = plumbum.local["psql"]["-h", hostname, "-U", username, "-d", database]
-        if password:
-            raise InvalidConfigException(
-                "Postgresql Password NOT SUPPORTED for automatic migrations... "
-            )
-        if port:
-            psql = psql["-p", port]
+        psql = plumbum.local["psql"][uri]
         sql_consumer = psql
     else:
         sqlite_database_path = pathlib.Path(uri.netloc) / pathlib.Path(uri.path.strip('/'))
@@ -287,8 +263,6 @@ def recover_database_from_backup():
     # is plumbum syntax
     cmd() > "/dev/null"
     print("Done unpacking and feeding to", cmd)
-
-    # os.unlink(local_backup)
 
 
 def activate_migrations():
