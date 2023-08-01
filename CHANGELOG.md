@@ -2,6 +2,10 @@
 
 <!--next-version-placeholder-->
 
+## v0.5.1 (2023-08-02)
+### Fix
+* Solves the wrong object being sent as a set of arguments. psql should work ([`9743b3f`](https://github.com/educationwarehouse/migrate/commit/9743b3f4423b729a1bf739be0d2dc2052973bb1c))
+
 ## v0.5.0 (2023-08-02)
 ### Feature
 * Supports passwords in database uri's using uri scheme instead of -U -p arguments etc. psql is compatible with the `postgres://` uri scheme, so why bother? ([`80f09ce`](https://github.com/educationwarehouse/migrate/commit/80f09ce15369ee6756afedc2a4d44e176a1c95fb))
