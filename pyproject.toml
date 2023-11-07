@@ -38,6 +38,7 @@ dev = [
     "isort",
     "pytest",
     "pytest-cov",
+    "contextlib-chdir",
 ]
 
 [template.plugins.default]
@@ -177,6 +178,11 @@ exclude_lines = [
     "if TYPE_CHECKING:",
 ]
 
+[tool.pytest.ini_options]
+pythonpath = [
+    "src",
+]
+
 [tool.su6]
 # every checker:
 directory = "src"
@@ -184,9 +190,13 @@ directory = "src"
 include = []
 exclude = []
 # 'all':
-stop-after-first-failure = true
+stop-after-first-failure = false
 # pytest:
 coverage = 100
 badge = false
 # --format json indent
 json-indent = 4
+
+[tool.migrate]
+# example:
+migrate-uri = "sqlite:///tmp/migrate_example.sqlite"

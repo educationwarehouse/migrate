@@ -65,7 +65,35 @@ class MigrationFailed(Exception):
     pass
 
 
-T_Dal = typing.Type[DAL]
+T_Dal = typing.TypeVar("T_Dal", bound=DAL)
+
+
+@typing.overload
+def setup_db(
+    migrate: bool = False,
+    migrate_enabled: bool = False,
+    appname: str = " ".join(sys.argv),
+    long_running: bool | int = False,
+    dal_class: None = None,
+    impl_feat_table_name: Optional[str] = None,
+) -> DAL:
+    """
+    If `dal_class` is not filled in, a normal DAL instance is returned.
+    """
+
+
+@typing.overload
+def setup_db(
+    migrate: bool = False,
+    migrate_enabled: bool = False,
+    appname: str = " ".join(sys.argv),
+    long_running: bool | int = False,
+    dal_class: typing.Type[T_Dal] = DAL,
+    impl_feat_table_name: Optional[str] = None,
+) -> T_Dal:
+    """
+    If `dal_class` is passed, an instance of that class will be returned.
+    """
 
 
 def setup_db(
@@ -73,9 +101,9 @@ def setup_db(
     migrate_enabled: bool = False,
     appname: str = " ".join(sys.argv),
     long_running: bool | int = False,
-    dal_class: Optional[T_Dal] = None,
+    dal_class: typing.Type[T_Dal] | None = None,
     impl_feat_table_name: Optional[str] = None,
-):
+) -> T_Dal | DAL:
     """
 
     Connect to the database and return a DAL object.
@@ -98,7 +126,7 @@ def setup_db(
     :param long_running: bool or int to indicate the number of seconds to keep the connection alive
         using pgpool set_client_idle_limit
     :param dal_class: optional DAL class, will use DAL if not given
-    :param: impl_feat_table_name: optional custom table name for ewh_implemented_features
+    :param impl_feat_table_name: optional custom table name for ewh_implemented_features
 
     :return: database connection
     """
@@ -165,7 +193,9 @@ def migration(
     func: Migration,
     requires: list[Migration] | Migration | None = None,
 ) -> Migration:
-    ...
+    """
+    Allows calling @migration without parens.
+    """
 
 
 @typing.overload
@@ -173,7 +203,9 @@ def migration(
     func: None = None,
     requires: list[Migration] | Migration | None = None,
 ) -> typing.Callable[[Migration], Migration]:
-    ...
+    """
+    Allows calling @migration() with parens.
+    """
 
 
 def migration(
@@ -210,22 +242,21 @@ def migration(
             def with_requires(*p, **kwp):
                 # check requirements
                 db = setup_db()
-                installed = [
-                    row.installed
-                    for row in db(
+                installed = (
+                    db(
                         db.ewh_implemented_features.name.belongs(required_names)
                         & (db.ewh_implemented_features.installed == True)
-                    ).select("installed")
-                ]
+                    )
+                    .select("installed")
+                    .column("installed")
+                )
+
                 # check if all requirements are in the list of installed features
-                if len(installed) != len(required_names):
+                if len(installed) != len(required_names) or not all(installed):
                     db.close()
                     print(decorated.__name__, "REQUIREMENTS NOT MET")
                     raise RequimentsNotMet("requirements not met")
-                if not all(installed):
-                    db.close()
-                    print(decorated.__name__, "REQUIREMENTS NOT MET")
-                    raise RequimentsNotMet("requirements not met")
+
                 return decorated(*p, **kwp)
 
             registered_functions[decorated.__name__] = with_requires
@@ -275,6 +306,7 @@ def recover_database_from_backup():
 
     print("RECOVER_DATABASE_FROM_BACKEND started ")
     prepared_sql_path = pathlib.Path(config.database_to_restore)
+
     if not prepared_sql_path.exists():
         raise FileNotFoundError(prepared_sql_path)
     extension = prepared_sql_path.suffix.lower()
@@ -300,7 +332,11 @@ def recover_database_from_backup():
         psql = plumbum.local["psql"][config.migrate_uri]
         sql_consumer = psql
     else:
-        sqlite_database_path = pathlib.Path(uri.netloc) / pathlib.Path(uri.path.strip("/"))
+        filepath = uri.path
+        if "///" not in config.migrate_uri:
+            # else absolute path, don't strip!
+            filepath = filepath.strip("/")
+        sqlite_database_path = pathlib.Path(uri.netloc) / pathlib.Path(filepath)
         sql_consumer = plumbum.local["sqlite3"][sqlite_database_path]
     # combine both
     cmd = unpack | sql_consumer
@@ -464,18 +500,39 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
         return f"<Config{data}>"
 
 
+def _get_config():
+    """
+    First try config from env, then fallback to pyproject.
+    """
+    with contextlib.suppress(configuraptor.errors.ConfigError):
+        return Config.from_env(load_dotenv=True)
+
+    with contextlib.suppress(configuraptor.errors.ConfigError, FileNotFoundError):
+        return Config.load("pyproject.toml", key="tool.migrate")
+
+    # final guess:
+    return Config.load()
+
+
 @typing.overload
 def get_config(key: str) -> typing.Any:
-    ...
+    """
+    If you get_config with a key, that propertly will be returned from the config.
+    """
 
 
 @typing.overload
 def get_config(key: None = None) -> Config:
-    ...
+    """
+    If you get_config without a key, the whole config object will be returned.
+    """
 
 
 def get_config(key: Optional[str] = None) -> Config | typing.Any:
-    config = Config.from_env(load_dotenv=True)
+    """
+    Get the whole config or a specific key
+    """
+    config = _get_config()
     if key:
         return getattr(config, key)
 

@@ -1,13 +1,16 @@
 import os
 import pathlib
 import shutil
+from contextlib_chdir import chdir
 
 import plumbum
 import pydal
 import pytest
 from configuraptor import Singleton
+from pydal import DAL
 
-from src.edwh_migrate import migrate
+from src.edwh_migrate import migrate, recover_database_from_backup
+from src.edwh_migrate.migrate import get_config
 
 
 @pytest.fixture(scope="session")
@@ -39,6 +42,11 @@ def tmp_empty_sqlite_db_file(tmp_sqlite_folder, sqlite_empty):
 
 
 @pytest.fixture
+def tmp_just_implemented_features_sqlite_sql_file(tmp_sqlite_folder, sqlite_empty):
+    return sqlite_empty / "sqlite_empty" / "just_implemented_features.sql"
+
+
+@pytest.fixture
 def tmp_just_implemented_features_sqlite_db_file(tmp_sqlite_folder, sqlite_empty):
     dst = tmp_sqlite_folder / "just_implemented_features.db"
     shutil.copy(sqlite_empty / "sqlite_empty" / "just_implemented_features.db", dst)
@@ -55,11 +63,25 @@ def clean_migrate():
 
 
 def test_env_migrate_uri_is_missing():
-    with pytest.raises(migrate.InvalidConfigException):
-        migrate.setup_db()
+    with chdir("tests"):
+        with pytest.raises(migrate.InvalidConfigException):
+            migrate.setup_db()
 
 
-def test_apply_empty_run_to_empty_sqlite(tmp_empty_sqlite_db_file):
+def test_migrate_from_toml(clean_migrate):
+    assert migrate.setup_db()
+
+
+def test_setup_db_custom_pydal_class(clean_migrate):
+    class DALish(DAL):
+        ...
+
+    db = migrate.setup_db(dal_class=DALish)
+
+    assert isinstance(db, DALish)
+
+
+def test_apply_empty_run_to_empty_sqlite(tmp_empty_sqlite_db_file, clean_migrate):
     with pytest.raises(migrate.DatabaseNotYetInitialized):
         migrate.setup_db()
 
@@ -157,11 +179,45 @@ def test_dependency_failure(clean_migrate, tmp_just_implemented_features_sqlite_
         return True
 
     assert len(migrate.registered_functions) == 2
+
     with pytest.raises(migrate.RequimentsNotMet):
         migrate.activate_migrations()
+
     db = migrate.setup_db()
     dump_db(db, echo=True)
     assert db(db.ewh_implemented_features.installed == True).count() == 0, "requirement failed, no succes possible"
     assert (
         db(db.ewh_implemented_features.installed == False).count() == 1
     ), "because of the exception, `dependent` is never written to the database. "
+
+
+def test_recover_database_from_backup(tmp_just_implemented_features_sqlite_sql_file, tmp_empty_sqlite_db_file):
+    config = get_config()
+
+    with pytest.raises(migrate.DatabaseNotYetInitialized):
+        migrate.setup_db(migrate=False)
+
+    fake_path = pathlib.Path("/tmp/fake_file.xyz")
+    fake_path.unlink()
+    config.database_to_restore = str(fake_path)
+
+    with pytest.raises(FileNotFoundError):
+        recover_database_from_backup()
+
+    fake_path.touch()
+    with pytest.raises(NotImplementedError):
+        # invalid extension
+        recover_database_from_backup()
+
+    config.database_to_restore = str(tmp_just_implemented_features_sqlite_sql_file)
+    recover_database_from_backup()
+
+    # no error anymore:
+    assert migrate.setup_db(migrate=False)
+
+
+def test_config():
+    config = get_config()
+    assert config is get_config()  # singleton
+
+    assert config.database_to_restore == get_config("database_to_restore")
