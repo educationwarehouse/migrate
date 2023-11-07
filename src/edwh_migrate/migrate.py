@@ -27,14 +27,19 @@ import urllib.parse
 from collections import OrderedDict
 from functools import wraps
 from pathlib import Path
+from typing import Optional
 
+import configuraptor
 import plumbum
 import psycopg2
 import psycopg2.errors
 import redis
+from configuraptor import asdict
+from configuraptor.errors import ConfigErrorMissingKey
 from pydal import DAL, Field
 
 registered_functions = OrderedDict()
+
 
 class UnknownConfigException(BaseException):
     pass
@@ -55,18 +60,20 @@ class RequimentsNotMet(BaseException):
 class MigrateLockExists(Exception):
     pass
 
+
 class MigrationFailed(Exception):
     pass
 
 
 def setup_db(
-        migrate: bool = False,
-        migrate_enabled: bool = False,
-        appname: str = " ".join(sys.argv),
-        long_running: bool | int = False,
-        dal_class: type = None,
+    migrate: bool = False,
+    migrate_enabled: bool = False,
+    appname: str = " ".join(sys.argv),
+    long_running: bool | int = False,
+    dal_class: type = None,
+    impl_feat_table_name: str = None,
 ):
-    '''
+    """
 
     Connect to the database and return a DAL object.
 
@@ -88,15 +95,18 @@ def setup_db(
     :param long_running: bool or int to indicate the number of seconds to keep the connection alive using pgpool set_client_idle_limit
     :param dal_class: optional DAL class, will use DAL if not given
     :return: database connection
-    '''
+    """
+
     if dal_class is None:
         # default: pydal.DAL
         # (alternative: py4web.core.DAL)
         dal_class = DAL
 
     try:
-        uri = os.environ["MIGRATE_URI"]
-    except KeyError as e:
+        config = get_config()
+
+        uri = config.migrate_uri
+    except (KeyError, ConfigErrorMissingKey) as e:
         raise InvalidConfigException("$MIGRATE_URI not found in environment.") from e
     is_postgres = uri.startswith('postgres')
     driver_args = {}
@@ -121,19 +131,22 @@ def setup_db(
             print('Setting up for long running connection')
             db.executesql(f"PGPOOL SET client_idle_limit = {long_running if str(long_running).isdigit() else 3600};")
             db.rollback()
+
+    if impl_feat_table_name is None:
+        impl_feat_table_name = config.migrate_table
+
     db.define_table(
         "ewh_implemented_features",
         Field("name", unique=True),
         Field("installed", "boolean", default=False),
         Field("last_update_dttm", "datetime", default=datetime.datetime.now()),
+        rname=impl_feat_table_name,
     )
     try:
         db(db.ewh_implemented_features).count()
     except (psycopg2.errors.UndefinedTable, sqlite3.OperationalError) as e:
         db.rollback()
-        raise DatabaseNotYetInitialized(
-            "ewh_implemented_features is missing.", db
-        ) from e
+        raise DatabaseNotYetInitialized(f"{config.migrate_table} is missing.", db) from e
 
     return db
 
@@ -171,8 +184,8 @@ def migration(func: callable = None, requires: list[callable] | typing.Callable 
                 installed = [
                     row.installed
                     for row in db(
-                        db.ewh_implemented_features.name.belongs(required_names) &
-                        (db.ewh_implemented_features.installed == True)
+                        db.ewh_implemented_features.name.belongs(required_names)
+                        & (db.ewh_implemented_features.installed == True)
                     ).select("installed")
                 ]
                 # check if all requirements are in the list of installed features
@@ -226,8 +239,10 @@ def recover_database_from_backup():
           C) cat /data/database_to_restore.sql | psql -h  127.0.0.1 -U postgres -d backend
 
     """
+    config = get_config()
+
     print("RECOVER_DATABASE_FROM_BACKEND started ")
-    prepared_sql_path = pathlib.Path(os.getenv('DATABASE_TO_RESTORE', "/data/database_to_restore.sql"))
+    prepared_sql_path = pathlib.Path(config.database_to_restore)
     if not prepared_sql_path.exists():
         raise FileNotFoundError(prepared_sql_path)
     extension = prepared_sql_path.suffix.lower()
@@ -236,7 +251,7 @@ def recover_database_from_backup():
         '.sql': 'cat',
         '.xz': 'xzcat',
         '.gz': 'zcat',
-    }.get(extension, os.getenv('MIGRATE_CAT_COMMAND'))
+    }.get(extension, config.migrate_cat_command)
     if not cat_command:
         raise NotImplementedError(f"Extension {extension} not supported for {prepared_sql_path}")
     unpack = plumbum.local[cat_command][prepared_sql_path]
@@ -246,11 +261,11 @@ def recover_database_from_backup():
 
     # parse the db uri to find hostname and port and such to
     # feed to pqsl as commandline arguments
-    uri = urllib.parse.urlparse(os.environ["MIGRATE_URI"])
+    uri = urllib.parse.urlparse(config.migrate_uri)
 
-    if  uri.scheme.startswith("postgres"):
+    if uri.scheme.startswith("postgres"):
         # prepare the psql command
-        psql = plumbum.local["psql"][os.environ["MIGRATE_URI"]]
+        psql = plumbum.local["psql"][config.migrate_uri]
         sql_consumer = psql
     else:
         sqlite_database_path = pathlib.Path(uri.netloc) / pathlib.Path(uri.path.strip('/'))
@@ -267,13 +282,13 @@ def recover_database_from_backup():
 
 def activate_migrations():
     """Start the migration process, don't wait for a lock"""
+    config = get_config()
+
     started = time.time()
     while time.time() - started < 600:
         try:
             db = setup_db()
-            print(
-                "activate_migrations connected after", time.time() - started, "seconds."
-            )
+            print("activate_migrations connected after", time.time() - started, "seconds.")
 
             db.commit()
             # without an error, all *should* be well...
@@ -295,9 +310,14 @@ def activate_migrations():
                 time.sleep(10)
                 # reconnect to the database, since the above operation takes longer than timeout period on dev machines.
                 db = setup_db()
+
+            except FileNotFoundError as e:
+                print(f"RECOVER: {e} not found. Starting from scratch.")
+                db = setup_db(migrate=True, migrate_enabled=True)
+
             except Exception as e:
                 print("RECOVER: database recovery went wrong:", e)
-            break  # don retry
+            break  # don't retry
         except Exception as e:
             print(
                 "activate_migrations failed to connect to database. "
@@ -353,7 +373,7 @@ def activate_migrations():
 
     # clean redis whenever possible
     # reads REDIS_MASTER_HOST from the environment
-    if redis_host := os.getenv("REDIS_HOST", None):
+    if redis_host := config.redis_host:
         r = redis.Redis(redis_host)
         keys = r.keys()
         print(f"Removing {len(keys)} keys from redis.")
@@ -368,7 +388,9 @@ def schema_versioned_lock_file():
     """
     Context manager that creates a lock file for the current schema version.
     """
-    if (schema_version := os.getenv("SCHEMA_VERSION")) is None:
+    config = get_config()
+
+    if (schema_version := config.schema_version) is None:
         print('No schema version found, ignoring any lock files.')
         yield
     else:
@@ -376,9 +398,7 @@ def schema_versioned_lock_file():
         lock_file = Path(f'/flags/migrate-{schema_version}.complete')
         print("Using lock file: ", lock_file)
         if lock_file.exists():
-            print(
-                "migrate: lock file already exists, migration should be completed. Aborting migration"
-            )
+            print("migrate: lock file already exists, migration should be completed. Aborting migration")
             raise MigrateLockExists(str(lock_file))
         else:
             # create the lock asap, to avoid racing conditions with other possible migration processes
@@ -387,14 +407,47 @@ def schema_versioned_lock_file():
                 yield
             except MigrationFailed:
                 # remove the lock file, so that the migration can be retried.
-                print("ERROR: migration failed, removing the lock file.\n"
-                      "Check the ewh_implemented_features table for details.")
+                print(
+                    "ERROR: migration failed, removing the lock file.\n"
+                    "Check the ewh_implemented_features table for details."
+                )
                 lock_file.unlink()
 
             except Exception:
                 # since another exception was raised, reraise it for the stack trace.
                 lock_file.unlink()
                 raise
+
+
+class Config(configuraptor.TypedConfig, configuraptor.Singleton):
+    migrate_uri: str
+    schema_version: Optional[str]
+    redis_host: Optional[str]
+    migrate_cat_command: Optional[str]
+    database_to_restore: str = "/data/database_to_restore.sql"
+    migrate_table: str = "ewh_implemented_features"
+
+    def __repr__(self):
+        data = asdict(self, with_top_level_key=False)
+        return f"<Config{data}>"
+
+
+@typing.overload
+def get_config(key: str) -> typing.Any:
+    ...
+
+
+@typing.overload
+def get_config(key: None = None) -> Config:
+    ...
+
+
+def get_config(key: Optional[str] = None) -> Config | typing.Any:
+    config = Config.from_env(load_dotenv=True)
+    if key:
+        return getattr(config, key)
+
+    return config
 
 
 def console_hook():
@@ -406,7 +459,8 @@ def console_hook():
     # get the versioned lock file path, as the config performs the environment variable expansion
 
     if '-h' in sys.argv or '--help' in sys.argv:
-        print('''
+        print(
+            '''
         Execute migrate to run the migration in `migrations.py` from the current working directory. 
         
         The database connection url is read from the MIGRATE_URI environment variable. It should be a 
@@ -419,44 +473,44 @@ def console_hook():
         $sqlite3 test.db  "create table ewh_implemented_features(id, name, installed, last_update_dttm);"
         $export MIGRATE_URI='sqlite://test.db'
         
-        ''')
+        '''
+        )
         exit(0)
 
-    with contextlib.suppress(MigrateLockExists):
-        with schema_versioned_lock_file():
-            arg = None
-            if sys.argv[1:]:
-                print(f'Using argument {sys.argv[1]} as a reference to the migrations file.')
-                # use the first argument as a reference to the migrations file
-                # or the folder where the migrations file is stored
-                arg = pathlib.Path(sys.argv[1])
-                if arg.exists() and arg.is_file():
-                    print(f"importing migrations from {arg}")
-                    sys.path.insert(0, str(arg.parent))
-                    # importing the migrations.py file will register the functions
-                    importlib.import_module(arg.stem)
-                elif arg.exists() and arg.is_dir():
-                    print(f"importing migrations from {arg}/migrations.py")
-                    sys.path.insert(0, str(arg))
-                    # importing the migrations.py file will register the functions
-                    importlib.import_module('migrations')
-                else:
-                    print(f"ERROR: no migrations found at {arg}", file=sys.stderr)
-                    exit(1)
-            elif Path('migrations.py').exists():
-                print("migrations.py exists, importing @migration decorated functions.")
-                sys.path.insert(0, os.getcwd())
+    with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file():
+        if sys.argv[1:]:
+            print(f'Using argument {sys.argv[1]} as a reference to the migrations file.')
+            # use the first argument as a reference to the migrations file
+            # or the folder where the migrations file is stored
+            arg = pathlib.Path(sys.argv[1])
+            if arg.exists() and arg.is_file():
+                print(f"importing migrations from {arg}")
+                sys.path.insert(0, str(arg.parent))
                 # importing the migrations.py file will register the functions
-                import migrations
+                importlib.import_module(arg.stem)
+            elif arg.exists() and arg.is_dir():
+                print(f"importing migrations from {arg}/migrations.py")
+                sys.path.insert(0, str(arg))
+                # importing the migrations.py file will register the functions
+                importlib.import_module('migrations')
             else:
-                print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
+                print(f"ERROR: no migrations found at {arg}", file=sys.stderr)
                 exit(1)
-            print("starting migrate hook")
-            print(f'{len(registered_functions)} migrations discovered')
-            if activate_migrations():
-                print("migration completed successfully, marking success.")
-            else:
-                raise MigrationFailed('Not every migration succeeded.')
+        elif Path('migrations.py').exists():
+            print("migrations.py exists, importing @migration decorated functions.")
+            sys.path.insert(0, os.getcwd())
+            # importing the migrations.py file will register the functions
+
+        else:
+            print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
+            exit(1)
+        print("starting migrate hook")
+        print(f'{len(registered_functions)} migrations discovered')
+        if activate_migrations():
+            print("migration completed successfully, marking success.")
+        else:
+            raise MigrationFailed('Not every migration succeeded.')
+
 
 # ------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------
@@ -468,4 +522,3 @@ def console_hook():
 # def start_from_scratch(db: DAL) -> bool:
 #     print(f"String from scratch using {db}")
 #     return True
-

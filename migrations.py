@@ -5,6 +5,7 @@
 
 from edwh_migrate import migration
 
+
 @migration
 def feature_1(db):
     # mogelijkheden om in een feature te doen:
@@ -32,9 +33,12 @@ def feature_3(db):
     print("feature_3")
     return True
 
+
 @migration
 def functionalname_date_sequencenr(db):
-    db.executesql('''
-    ''')
+    db.executesql(
+        '''
+    '''
+    )
     db.commit()
     return True

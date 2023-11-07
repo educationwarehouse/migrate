@@ -1,10 +1,11 @@
 import os
 import pathlib
+import shutil
 
+import plumbum
 import pydal
 import pytest
-import shutil
-import plumbum
+from configuraptor import Singleton
 
 from src.edwh_migrate import migrate
 
@@ -50,6 +51,8 @@ def tmp_just_implemented_features_sqlite_db_file(tmp_sqlite_folder, sqlite_empty
 @pytest.fixture
 def clean_migrate():
     migrate.registered_functions = {}
+    Singleton.clear()  # clean cached Config
+
 
 def test_env_migrate_uri_is_missing():
     with pytest.raises(migrate.InvalidConfigException):
@@ -106,7 +109,9 @@ def test_dummy_is_not_migrated_twice(tmp_just_implemented_features_sqlite_db_fil
     result = migrate.activate_migrations()
     assert result is True, "the dummy returning True should have been marked as successful"
     result = migrate.activate_migrations()
-    assert 'already installed.' in capsys.readouterr().out, "the dummy returning True should have been marked as successful"
+    assert (
+        'already installed.' in capsys.readouterr().out
+    ), "the dummy returning True should have been marked as successful"
     db = migrate.setup_db()
     # dump_db(db, echo=True)
     assert db(db.ewh_implemented_features).count() == 1, "exactly one row should be in the table"
@@ -131,11 +136,9 @@ def test_dependencies(clean_migrate, tmp_just_implemented_features_sqlite_db_fil
     def dependent(db):
         return True
 
-
     assert len(migrate.registered_functions) == 2
     result = migrate.activate_migrations()
     assert result is True
-
 
     db = migrate.setup_db()
     assert result is True, "the dependent returning True should have been marked as successful"
@@ -159,5 +162,6 @@ def test_dependency_failure(clean_migrate, tmp_just_implemented_features_sqlite_
     db = migrate.setup_db()
     dump_db(db, echo=True)
     assert db(db.ewh_implemented_features.installed == True).count() == 0, "requirement failed, no succes possible"
-    assert db(db.ewh_implemented_features.installed == False).count() == 1, "because of the exception, `dependent` is never written to the database. "
-
+    assert (
+        db(db.ewh_implemented_features.installed == False).count() == 1
+    ), "because of the exception, `dependent` is never written to the database. "
