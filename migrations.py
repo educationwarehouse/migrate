@@ -2,6 +2,7 @@
 # SPDX-FileCopyrightText: 2023-present Remco <remco@educationwarehouse.nl>
 #
 # SPDX-License-Identifier: MIT
+import typing
 
 from pydal import DAL
 
@@ -37,7 +38,7 @@ def feature_3(db):
 
 
 @migration
-def functionalname_date_sequencenr(db: DAL):
+def functionalname_date_sequencenr(db):
     db.executesql("""
     
     """)

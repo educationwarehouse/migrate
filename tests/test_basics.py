@@ -84,7 +84,7 @@ def dump_db(db: pydal.DAL, *, echo=False):
 
 
 def test_always_true_dummy_is_migrated(tmp_just_implemented_features_sqlite_db_file):
-    @migrate.migration
+    @migrate.migration()
     def dummy(db):
         return True
 

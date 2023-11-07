@@ -157,10 +157,29 @@ def setup_db(
     return db
 
 
+Migration: typing.TypeAlias = typing.Callable[[DAL], bool]
+
+
+@typing.overload
 def migration(
-    func: typing.Callable[..., bool] | None = None,
-    requires: list[typing.Callable[..., bool]] | typing.Callable[..., bool] | None = None,
-):
+    func: Migration,
+    requires: list[Migration] | Migration | None = None,
+) -> Migration:
+    ...
+
+
+@typing.overload
+def migration(
+    func: None = None,
+    requires: list[Migration] | Migration | None = None,
+) -> typing.Callable[[Migration], Migration]:
+    ...
+
+
+def migration(
+    func: Migration | None = None,
+    requires: list[Migration] | Migration | None = None,
+) -> Migration | typing.Callable[[Migration], Migration]:
     """
     Decorator to register a function as a migration function.
 
@@ -186,7 +205,7 @@ def migration(
             # if requires is not callable, then it must be a list of functions, so take the names of those functions.
             required_names = [_.__name__ for _ in requires]
 
-        def decorator(decorated: typing.Callable[..., bool]):
+        def decorator(decorated: Migration) -> Migration:
             @wraps(decorated)
             def with_requires(*p, **kwp):
                 # check requirements
@@ -213,9 +232,12 @@ def migration(
             return with_requires
 
         return decorator
+
     if func:
         registered_functions[func.__name__] = func
-    return func
+        return func
+
+    return migration
 
 
 def should_run(db: DAL, name: str) -> bool:
