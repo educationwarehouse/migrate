@@ -6,7 +6,7 @@ import pytest
 import shutil
 import plumbum
 
-from edwh_migrate import migrate
+from src.edwh_migrate import migrate
 
 
 @pytest.fixture(scope='session')
@@ -139,6 +139,7 @@ def test_dependencies(clean_migrate, tmp_just_implemented_features_sqlite_db_fil
 
     db = migrate.setup_db()
     assert result is True, "the dependent returning True should have been marked as successful"
+
     assert db(db.ewh_implemented_features.installed == True).count() == 2, "exactly two rows should be marked installed"
 
 
