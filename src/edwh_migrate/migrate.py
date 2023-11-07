@@ -452,18 +452,28 @@ def activate_migrations():
 
 
 @contextlib.contextmanager
-def schema_versioned_lock_file():
+def schema_versioned_lock_file(flag_location: str | Path | None = None, create_flag_location: bool = False):
     """
     Context manager that creates a lock file for the current schema version.
     """
     config = get_config()
+    config.schema_version = "1"
+    flag_location = Path(flag_location or config.flag_location)
+    if not flag_location.exists():
+        if create_flag_location or config.create_flag_location:
+            flag_location.mkdir()
+        else:
+            raise NotADirectoryError(
+                f"Flag directory {flag_location} does not exist. "
+                f"Please create it or set `create_flag_location` to True."
+            )
 
     if (schema_version := config.schema_version) is None:
         print("No schema version found, ignoring any lock files.")
         yield
     else:
         print("testing migrate lock file with the current version")
-        lock_file = Path(f"/flags/migrate-{schema_version}.complete")
+        lock_file = flag_location / f"migrate-{schema_version}.complete"
         print("Using lock file: ", lock_file)
         if lock_file.exists():
             print("migrate: lock file already exists, migration should be completed. Aborting migration")
@@ -494,6 +504,8 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
     migrate_cat_command: Optional[str]
     database_to_restore: str = "/data/database_to_restore.sql"
     migrate_table: str = "ewh_implemented_features"
+    flag_location: str = "/flags"
+    create_flag_location: bool = False
 
     def __repr__(self):
         data = asdict(self, with_top_level_key=False)
@@ -533,21 +545,16 @@ def get_config(key: Optional[str] = None) -> Config | typing.Any:
     Get the whole config or a specific key
     """
     config = _get_config()
+    # config.update_from_env()  # extend toml defaults with env secrets
+
     if key:
         return getattr(config, key)
 
     return config
 
 
-def console_hook():
-    """
-    Activated by migrate shell script, sets a lock file before activate_migrations.
-
-    lockfile: '/flags/migrate-{os.environ["SCHEMA_VERSION"]}.complete'
-    """
-    # get the versioned lock file path, as the config performs the environment variable expansion
-
-    if "-h" in sys.argv or "--help" in sys.argv:
+def _console_hook(args: list[str]):
+    if "-h" in args or "--help" in args:
         print(
             """
         Execute migrate to run the migration in `migrations.py` from the current working directory.
@@ -566,12 +573,13 @@ def console_hook():
         )
         exit(0)
 
+    # get the versioned lock file path, as the config performs the environment variable expansion
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file():
-        if sys.argv[1:]:
-            print(f"Using argument {sys.argv[1]} as a reference to the migrations file.")
+        if args:
+            print(f"Using argument {args[0]} as a reference to the migrations file.")
             # use the first argument as a reference to the migrations file
             # or the folder where the migrations file is stored
-            arg = pathlib.Path(sys.argv[1])
+            arg = pathlib.Path(args[0])
             if arg.exists() and arg.is_file():
                 print(f"importing migrations from {arg}")
                 sys.path.insert(0, str(arg.parent))
@@ -589,7 +597,7 @@ def console_hook():
             print("migrations.py exists, importing @migration decorated functions.")
             sys.path.insert(0, os.getcwd())
             # importing the migrations.py file will register the functions
-
+            import migrations  # noqa F401: semantic import here
         else:
             print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
             exit(1)
@@ -599,6 +607,15 @@ def console_hook():
             print("migration completed successfully, marking success.")
         else:
             raise MigrationFailed("Not every migration succeeded.")
+
+
+def console_hook():
+    """
+    Activated by migrate shell script, sets a lock file before activate_migrations.
+
+    lockfile: '/flags/migrate-{os.environ["SCHEMA_VERSION"]}.complete'
+    """
+    _console_hook(sys.argv[1:])
 
 
 # ------------------------------------------------------------------------------------------------
