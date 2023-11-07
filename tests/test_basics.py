@@ -10,42 +10,42 @@ from configuraptor import Singleton
 from src.edwh_migrate import migrate
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def tmp_sqlite_folder(tmp_path_factory):
-    return tmp_path_factory.mktemp('sqlite3.tmp')
+    return tmp_path_factory.mktemp("sqlite3.tmp")
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def sqlite_empty():
     return pathlib.Path(__file__).parent
 
 
 @pytest.fixture
 def tmp_sqlite_sql_file(tmp_sqlite_folder, sqlite_empty):
-    dst = tmp_sqlite_folder / 'test.sql'
-    shutil.copy(sqlite_empty / 'test.sql', dst)
+    dst = tmp_sqlite_folder / "test.sql"
+    shutil.copy(sqlite_empty / "test.sql", dst)
     yield dst
     dst.unlink(missing_ok=True)
 
 
 @pytest.fixture
 def tmp_empty_sqlite_db_file(tmp_sqlite_folder, sqlite_empty):
-    dst = tmp_sqlite_folder / 'empty_sqlite.db'
-    shutil.copy(sqlite_empty / 'sqlite_empty' / 'empty_sqlite.db', dst)
-    os.environ['MIGRATE_URI'] = f'sqlite://{str(dst)}'
+    dst = tmp_sqlite_folder / "empty_sqlite.db"
+    shutil.copy(sqlite_empty / "sqlite_empty" / "empty_sqlite.db", dst)
+    os.environ["MIGRATE_URI"] = f"sqlite://{str(dst)}"
     yield dst
     dst.unlink(missing_ok=True)
-    del os.environ['MIGRATE_URI']
+    del os.environ["MIGRATE_URI"]
 
 
 @pytest.fixture
 def tmp_just_implemented_features_sqlite_db_file(tmp_sqlite_folder, sqlite_empty):
-    dst = tmp_sqlite_folder / 'just_implemented_features.db'
-    shutil.copy(sqlite_empty / 'sqlite_empty' / 'just_implemented_features.db', dst)
-    os.environ['MIGRATE_URI'] = f'sqlite://{str(dst)}'
+    dst = tmp_sqlite_folder / "just_implemented_features.db"
+    shutil.copy(sqlite_empty / "sqlite_empty" / "just_implemented_features.db", dst)
+    os.environ["MIGRATE_URI"] = f"sqlite://{str(dst)}"
     yield dst
     dst.unlink(missing_ok=True)
-    del os.environ['MIGRATE_URI']
+    del os.environ["MIGRATE_URI"]
 
 
 @pytest.fixture
@@ -77,7 +77,7 @@ def test_registration_works():
 
 
 def dump_db(db: pydal.DAL, *, echo=False):
-    output = plumbum.local['sqlite3'][db._uri.split('://')[1]]['.dump']()
+    output = plumbum.local["sqlite3"][db._uri.split("://")[1]][".dump"]()
     if echo:
         print(output)
     return output
@@ -96,7 +96,7 @@ def test_always_true_dummy_is_migrated(tmp_just_implemented_features_sqlite_db_f
     assert db(db.ewh_implemented_features).count() == 1, "exactly one row should be in the table"
     rs = db(db.ewh_implemented_features).select()
     assert len(rs) == 1, "exactly one row should be in the table"
-    assert rs.first().name == 'dummy', "the name of the row should be dummy"
+    assert rs.first().name == "dummy", "the name of the row should be dummy"
     assert rs.first().installed is True, "the row should be marked as installed in the database"
 
 
@@ -110,18 +110,18 @@ def test_dummy_is_not_migrated_twice(tmp_just_implemented_features_sqlite_db_fil
     assert result is True, "the dummy returning True should have been marked as successful"
     result = migrate.activate_migrations()
     assert (
-        'already installed.' in capsys.readouterr().out
+        "already installed." in capsys.readouterr().out
     ), "the dummy returning True should have been marked as successful"
     db = migrate.setup_db()
     # dump_db(db, echo=True)
     assert db(db.ewh_implemented_features).count() == 1, "exactly one row should be in the table"
     rs = db(db.ewh_implemented_features).select()
     assert len(rs) == 1, "exactly one row should be in the table"
-    assert rs.first().name == 'dummy', "the name of the row should be dummy"
+    assert rs.first().name == "dummy", "the name of the row should be dummy"
     assert rs.first().installed is True, "the row should be marked as installed in the database"
 
 
-@pytest.mark.parametrize("scenario", ['as_list', 'as_function'])
+@pytest.mark.parametrize("scenario", ["as_list", "as_function"])
 def test_dependencies(clean_migrate, tmp_just_implemented_features_sqlite_db_file, capsys, scenario):
     @migrate.migration
     def required(db):
@@ -132,7 +132,7 @@ def test_dependencies(clean_migrate, tmp_just_implemented_features_sqlite_db_fil
     result = migrate.activate_migrations()
     assert result is True, "the required migration returning True should have been marked as successful"
 
-    @migrate.migration(requires=required if scenario == 'as_function' else [required])
+    @migrate.migration(requires=required if scenario == "as_function" else [required])
     def dependent(db):
         return True
 
@@ -146,13 +146,13 @@ def test_dependencies(clean_migrate, tmp_just_implemented_features_sqlite_db_fil
     assert db(db.ewh_implemented_features.installed == True).count() == 2, "exactly two rows should be marked installed"
 
 
-@pytest.mark.parametrize("scenario", ['as_list', 'as_function'])
+@pytest.mark.parametrize("scenario", ["as_list", "as_function"])
 def test_dependency_failure(clean_migrate, tmp_just_implemented_features_sqlite_db_file, capsys, scenario):
     @migrate.migration
     def required(db):
         return False
 
-    @migrate.migration(requires=required if scenario == 'as_function' else [required])
+    @migrate.migration(requires=required if scenario == "as_function" else [required])
     def dependent(db):
         return True
 

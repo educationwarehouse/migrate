@@ -3,6 +3,8 @@
 #
 # SPDX-License-Identifier: MIT
 
+from pydal import DAL
+
 from edwh_migrate import migration
 
 
@@ -35,10 +37,9 @@ def feature_3(db):
 
 
 @migration
-def functionalname_date_sequencenr(db):
-    db.executesql(
-        '''
-    '''
-    )
+def functionalname_date_sequencenr(db: DAL):
+    db.executesql("""
+    
+    """)
     db.commit()
     return True
