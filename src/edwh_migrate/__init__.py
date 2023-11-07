@@ -24,11 +24,11 @@ from .migrate import (
 )
 
 __all__ = [
-    registered_functions,
-    migration,
-    activate_migrations,
-    setup_db,
-    recover_database_from_backup,
-    InvalidConfigException,
-    UnknownConfigException,
+    "registered_functions",
+    "migration",
+    "activate_migrations",
+    "setup_db",
+    "recover_database_from_backup",
+    "InvalidConfigException",
+    "UnknownConfigException",
 ]

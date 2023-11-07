@@ -4,10 +4,10 @@
 # SPDX-License-Identifier: MIT
 """
 When writing new tasks, make sure:
- * /!\ executesql() returns tuples, explicitly use as_dict or as_ordered_dict to have easy acces for results
- * /!\ arguments and placeholders use the `where gid = %(gid)s` syntax, where gid should be a key in the `placeholders`
+ * ! executesql() returns tuples, explicitly use as_dict or as_ordered_dict to have easy acces for results
+ * ! arguments and placeholders use the `where gid = %(gid)s` syntax, where gid should be a key in the `placeholders`
    argument given to executesql
- * /!\ make sure to use schema reference:
+ * ! make sure to use schema reference:
    - public."user"
    - public.item
    forget and fail...
@@ -65,13 +65,16 @@ class MigrationFailed(Exception):
     pass
 
 
+T_Dal = typing.Type[DAL]
+
+
 def setup_db(
     migrate: bool = False,
     migrate_enabled: bool = False,
     appname: str = " ".join(sys.argv),
     long_running: bool | int = False,
-    dal_class: type = None,
-    impl_feat_table_name: str = None,
+    dal_class: Optional[T_Dal] = None,
+    impl_feat_table_name: Optional[str] = None,
 ):
     """
 
@@ -80,8 +83,8 @@ def setup_db(
     When using postgres, the application name is set to the appname argument, long lasting connections are enabled
     when using long_running, to avoid PGPOOL closing the connection during unpacking of a larger backup file.
 
-    This function will also search for the ewh_implemented_features table, which is used to keep track of which migrations
-    have been attempted and applied.
+    This function will also search for the ewh_implemented_features table,
+    which is used to keep track of which migrations have been attempted and applied.
 
     If this table is not found, an DatabaseNotYetInitialized exception is raised. This is handled in the
     activate_migrations function to allow for the database to be restored from a backup before continuing.
@@ -92,8 +95,11 @@ def setup_db(
     :param migrate: migrate is normally turned off, but if you want to run migrations, set this to True
     :param migrate_enabled: normally migrate is turned off, but if you want to run migrations, set this to True
     :param appname: name of this application to register on postgres connections, default: " ".join(sys.argv)
-    :param long_running: bool or int to indicate the number of seconds to keep the connection alive using pgpool set_client_idle_limit
+    :param long_running: bool or int to indicate the number of seconds to keep the connection alive
+        using pgpool set_client_idle_limit
     :param dal_class: optional DAL class, will use DAL if not given
+    :param: impl_feat_table_name: optional custom table name for ewh_implemented_features
+
     :return: database connection
     """
 
@@ -108,10 +114,10 @@ def setup_db(
         uri = config.migrate_uri
     except (KeyError, ConfigErrorMissingKey) as e:
         raise InvalidConfigException("$MIGRATE_URI not found in environment.") from e
-    is_postgres = uri.startswith('postgres')
-    driver_args = {}
+    is_postgres = uri.startswith("postgres")
+    driver_args: dict[str, typing.Any] = {}
     if is_postgres:
-        driver_args['application_name'] = appname
+        driver_args["application_name"] = appname
         if not long_running:
             driver_args["keepalives"] = 1
 
@@ -128,7 +134,7 @@ def setup_db(
         # to perform the job.
         # db.executesql("PGPOOL SET client_idle_limit = 3600;")
         with contextlib.suppress(Exception):
-            print('Setting up for long running connection')
+            print("Setting up for long running connection")
             db.executesql(f"PGPOOL SET client_idle_limit = {long_running if str(long_running).isdigit() else 3600};")
             db.rollback()
 
@@ -151,7 +157,10 @@ def setup_db(
     return db
 
 
-def migration(func: callable = None, requires: list[callable] | typing.Callable | None = None):
+def migration(
+    func: typing.Callable[..., bool] | None = None,
+    requires: list[typing.Callable[..., bool]] | typing.Callable[..., bool] | None = None,
+):
     """
     Decorator to register a function as a migration function.
 
@@ -169,14 +178,15 @@ def migration(func: callable = None, requires: list[callable] | typing.Callable 
     if func is None and requires:
         # requires is given, so return the decorator that will test if the requirements are met before
         # executing the decorated function, when it's time to really execute the function.
-        if callable(requires):
+
+        if callable(requires):  # noqa: SIM108
             # when a single requirement is given, and it is a function, take the name of the function
             required_names = [requires.__name__]
         else:
             # if requires is not callable, then it must be a list of functions, so take the names of those functions.
             required_names = [_.__name__ for _ in requires]
 
-        def decorator(decorated: callable):
+        def decorator(decorated: typing.Callable[..., bool]):
             @wraps(decorated)
             def with_requires(*p, **kwp):
                 # check requirements
@@ -248,9 +258,9 @@ def recover_database_from_backup():
     extension = prepared_sql_path.suffix.lower()
 
     cat_command = {
-        '.sql': 'cat',
-        '.xz': 'xzcat',
-        '.gz': 'zcat',
+        ".sql": "cat",
+        ".xz": "xzcat",
+        ".gz": "zcat",
     }.get(extension, config.migrate_cat_command)
     if not cat_command:
         raise NotImplementedError(f"Extension {extension} not supported for {prepared_sql_path}")
@@ -268,7 +278,7 @@ def recover_database_from_backup():
         psql = plumbum.local["psql"][config.migrate_uri]
         sql_consumer = psql
     else:
-        sqlite_database_path = pathlib.Path(uri.netloc) / pathlib.Path(uri.path.strip('/'))
+        sqlite_database_path = pathlib.Path(uri.netloc) / pathlib.Path(uri.path.strip("/"))
         sql_consumer = plumbum.local["sqlite3"][sqlite_database_path]
     # combine both
     cmd = unpack | sql_consumer
@@ -391,11 +401,11 @@ def schema_versioned_lock_file():
     config = get_config()
 
     if (schema_version := config.schema_version) is None:
-        print('No schema version found, ignoring any lock files.')
+        print("No schema version found, ignoring any lock files.")
         yield
     else:
         print("testing migrate lock file with the current version")
-        lock_file = Path(f'/flags/migrate-{schema_version}.complete')
+        lock_file = Path(f"/flags/migrate-{schema_version}.complete")
         print("Using lock file: ", lock_file)
         if lock_file.exists():
             print("migrate: lock file already exists, migration should be completed. Aborting migration")
@@ -458,28 +468,28 @@ def console_hook():
     """
     # get the versioned lock file path, as the config performs the environment variable expansion
 
-    if '-h' in sys.argv or '--help' in sys.argv:
+    if "-h" in sys.argv or "--help" in sys.argv:
         print(
-            '''
-        Execute migrate to run the migration in `migrations.py` from the current working directory. 
-        
-        The database connection url is read from the MIGRATE_URI environment variable. It should be a 
-        pydal compatible connection string. 
-        
-        
+            """
+        Execute migrate to run the migration in `migrations.py` from the current working directory.
+
+        The database connection url is read from the MIGRATE_URI environment variable.
+        It should be a pydal compatible connection string.
+
+
         ## Testing migrations using sqlite
-        
-        Create a test setup using sqlite3: 
+
+        Create a test setup using sqlite3:
         $sqlite3 test.db  "create table ewh_implemented_features(id, name, installed, last_update_dttm);"
         $export MIGRATE_URI='sqlite://test.db'
-        
-        '''
+
+        """
         )
         exit(0)
 
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file():
         if sys.argv[1:]:
-            print(f'Using argument {sys.argv[1]} as a reference to the migrations file.')
+            print(f"Using argument {sys.argv[1]} as a reference to the migrations file.")
             # use the first argument as a reference to the migrations file
             # or the folder where the migrations file is stored
             arg = pathlib.Path(sys.argv[1])
@@ -492,11 +502,11 @@ def console_hook():
                 print(f"importing migrations from {arg}/migrations.py")
                 sys.path.insert(0, str(arg))
                 # importing the migrations.py file will register the functions
-                importlib.import_module('migrations')
+                importlib.import_module("migrations")
             else:
                 print(f"ERROR: no migrations found at {arg}", file=sys.stderr)
                 exit(1)
-        elif Path('migrations.py').exists():
+        elif Path("migrations.py").exists():
             print("migrations.py exists, importing @migration decorated functions.")
             sys.path.insert(0, os.getcwd())
             # importing the migrations.py file will register the functions
@@ -505,11 +515,11 @@ def console_hook():
             print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
             exit(1)
         print("starting migrate hook")
-        print(f'{len(registered_functions)} migrations discovered')
+        print(f"{len(registered_functions)} migrations discovered")
         if activate_migrations():
             print("migration completed successfully, marking success.")
         else:
-            raise MigrationFailed('Not every migration succeeded.')
+            raise MigrationFailed("Not every migration succeeded.")
 
 
 # ------------------------------------------------------------------------------------------------
