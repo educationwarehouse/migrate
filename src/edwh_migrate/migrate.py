@@ -210,7 +210,7 @@ def should_run(db: DAL, name: str) -> bool:
     return row.installed is False if row else True
 
 
-def recover_database_from_backup():
+def recover_database_from_backup(set_schema: str | bool = "public"):
     """
     Handles 3 situations:
     a) /data/database_to_restore.sql exists:
@@ -266,14 +266,11 @@ def recover_database_from_backup():
     cmd() > "/dev/null"
     print("Done unpacking and feeding to", cmd)
 
-    if is_postgres:
-        schema = "public"
+    if is_postgres and set_schema:
         echo = plumbum.local["echo"]
-        cmd = echo[f"SET search_path TO {schema};"] | sql_consumer
-        print("For postgres: set schema to public:")
-        print(cmd)
-        print(cmd())
-        print('end set schema')
+        cmd = echo[f"SET search_path TO {set_schema};"] | sql_consumer
+        print("For postgres: set schema to public:", cmd)
+        cmd()
 
 
 def activate_migrations():
