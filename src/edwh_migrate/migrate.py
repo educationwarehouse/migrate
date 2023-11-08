@@ -270,7 +270,7 @@ def recover_database_from_backup():
         schema = "public"
         echo = plumbum.local["echo"]
         cmd = echo[f"'SET search_path TO {schema};'"] | sql_consumer
-
+        print("For postgres: set schema to public", cmd)
         cmd()
 
 
