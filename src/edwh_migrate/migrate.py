@@ -36,6 +36,7 @@ from pydal import DAL, Field
 
 registered_functions = OrderedDict()
 
+
 class UnknownConfigException(BaseException):
     pass
 
@@ -54,6 +55,7 @@ class RequimentsNotMet(BaseException):
 
 class MigrateLockExists(Exception):
     pass
+
 
 class MigrationFailed(Exception):
     pass
@@ -248,7 +250,7 @@ def recover_database_from_backup():
     # feed to pqsl as commandline arguments
     uri = urllib.parse.urlparse(os.environ["MIGRATE_URI"])
 
-    if  uri.scheme.startswith("postgres"):
+    if is_postgres := uri.scheme.startswith("postgres"):
         # prepare the psql command
         psql = plumbum.local["psql"][os.environ["MIGRATE_URI"]]
         sql_consumer = psql
@@ -263,6 +265,13 @@ def recover_database_from_backup():
     # is plumbum syntax
     cmd() > "/dev/null"
     print("Done unpacking and feeding to", cmd)
+
+    if is_postgres:
+        schema = "public"
+        echo = plumbum.local["echo"]
+        cmd = echo[f"'SET search_path TO {schema};'"] | sql_consumer
+
+        cmd()
 
 
 def activate_migrations():
@@ -468,4 +477,3 @@ def console_hook():
 # def start_from_scratch(db: DAL) -> bool:
 #     print(f"String from scratch using {db}")
 #     return True
-
