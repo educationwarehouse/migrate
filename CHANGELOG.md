@@ -2,6 +2,10 @@
 
 <!--next-version-placeholder-->
 
+## v0.5.2-beta.3 (2023-11-08)
+
+
+
 ## v0.5.2-beta.2 (2023-11-08)
 
 
