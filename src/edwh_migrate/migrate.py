@@ -166,8 +166,7 @@ def setup_db(
             db.executesql(f"PGPOOL SET client_idle_limit = {long_running if str(long_running).isdigit() else 3600};")
             db.rollback()
 
-    if impl_feat_table_name is None:
-        impl_feat_table_name = config.migrate_table
+    impl_feat_table_name = impl_feat_table_name or config.migrate_table
 
     db.define_table(
         "ewh_implemented_features",
@@ -457,7 +456,7 @@ def schema_versioned_lock_file(flag_location: str | Path | None = None, create_f
     Context manager that creates a lock file for the current schema version.
     """
     config = get_config()
-    config.schema_version = "1"
+
     flag_location = Path(flag_location or config.flag_location)
     if not flag_location.exists():
         if create_flag_location or config.create_flag_location:
@@ -470,7 +469,7 @@ def schema_versioned_lock_file(flag_location: str | Path | None = None, create_f
 
     if (schema_version := config.schema_version) is None:
         print("No schema version found, ignoring any lock files.")
-        yield
+        yield None
     else:
         print("testing migrate lock file with the current version")
         lock_file = flag_location / f"migrate-{schema_version}.complete"
@@ -482,13 +481,11 @@ def schema_versioned_lock_file(flag_location: str | Path | None = None, create_f
             # create the lock asap, to avoid racing conditions with other possible migration processes
             lock_file.touch()
             try:
-                yield
+                yield lock_file
             except MigrationFailed:
                 # remove the lock file, so that the migration can be retried.
-                print(
-                    "ERROR: migration failed, removing the lock file.\n"
-                    "Check the ewh_implemented_features table for details."
-                )
+                print("ERROR: migration failed, removing the lock file.")
+                print(f"Check the {config.migrate_table} table for details.")
                 lock_file.unlink()
 
             except Exception:
@@ -553,7 +550,7 @@ def get_config(key: Optional[str] = None) -> Config | typing.Any:
     return config
 
 
-def _console_hook(args: list[str]):
+def _console_hook(args: list[str]):  # pragma: no cover
     if "-h" in args or "--help" in args:
         print(
             """
@@ -609,7 +606,7 @@ def _console_hook(args: list[str]):
             raise MigrationFailed("Not every migration succeeded.")
 
 
-def console_hook():
+def console_hook():  # pragma: no cover
     """
     Activated by migrate shell script, sets a lock file before activate_migrations.
 

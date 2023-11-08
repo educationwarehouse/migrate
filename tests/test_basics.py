@@ -10,7 +10,13 @@ from configuraptor import Singleton
 from pydal import DAL
 
 from src.edwh_migrate import migrate, recover_database_from_backup
-from src.edwh_migrate.migrate import get_config
+from src.edwh_migrate.migrate import get_config, schema_versioned_lock_file, MigrateLockExists, MigrationFailed
+from src.edwh_migrate.__about__ import __version__
+
+
+def test_version():
+    assert isinstance(__version__, str)
+    assert __version__
 
 
 @pytest.fixture(scope="session")
@@ -69,7 +75,12 @@ def test_env_migrate_uri_is_missing():
 
 
 def test_migrate_from_toml(clean_migrate):
-    assert migrate.setup_db()
+    config = get_config()
+    assert migrate.setup_db(migrate=True, migrate_enabled=True)
+
+    assert config.migrate_uri == "sqlite:///tmp/migrate_example.sqlite"
+
+    assert pathlib.Path("/tmp/migrate_example.sqlite").exists()
 
 
 def test_setup_db_custom_pydal_class(clean_migrate):
@@ -132,7 +143,7 @@ def test_dummy_is_not_migrated_twice(tmp_just_implemented_features_sqlite_db_fil
     assert result is True, "the dummy returning True should have been marked as successful"
     result = migrate.activate_migrations()
     assert (
-        "already installed." in capsys.readouterr().out
+            "already installed." in capsys.readouterr().out
     ), "the dummy returning True should have been marked as successful"
     db = migrate.setup_db()
     # dump_db(db, echo=True)
@@ -187,7 +198,7 @@ def test_dependency_failure(clean_migrate, tmp_just_implemented_features_sqlite_
     dump_db(db, echo=True)
     assert db(db.ewh_implemented_features.installed == True).count() == 0, "requirement failed, no succes possible"
     assert (
-        db(db.ewh_implemented_features.installed == False).count() == 1
+            db(db.ewh_implemented_features.installed == False).count() == 1
     ), "because of the exception, `dependent` is never written to the database. "
 
 
@@ -198,7 +209,7 @@ def test_recover_database_from_backup(tmp_just_implemented_features_sqlite_sql_f
         migrate.setup_db(migrate=False)
 
     fake_path = pathlib.Path("/tmp/fake_file.xyz")
-    fake_path.unlink()
+    fake_path.unlink(missing_ok=True)
     config.database_to_restore = str(fake_path)
 
     with pytest.raises(FileNotFoundError):
@@ -221,3 +232,47 @@ def test_config():
     assert config is get_config()  # singleton
 
     assert config.database_to_restore == get_config("database_to_restore")
+
+    assert "<Config{" in repr(config)
+
+def test_schema_versioned_lock_file(capsys):
+    config = get_config()
+    flag_dir = pathlib.Path("/tmp/test_flag_dir")
+    if flag_dir.exists():
+        [_.unlink() for _ in flag_dir.glob("*")]
+        flag_dir.rmdir()
+
+    with pytest.raises(NotADirectoryError):
+        with schema_versioned_lock_file() as lock:
+            pass
+
+    config.schema_version = None
+
+    with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=True) as lock:
+        assert lock is None
+
+    config.schema_version = "1"
+
+    with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=True) as lock:
+        assert lock
+
+    with pytest.raises(MigrateLockExists):
+        with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=False) as lock:
+            pass
+
+    config.schema_version = "2"
+
+    with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=False) as lock:
+        raise MigrationFailed()
+
+    captured = capsys.readouterr()
+
+    assert "removing the lock file" in captured.out
+
+    with pytest.raises(Exception):
+        with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=False) as lock:
+            raise Exception()
+
+    captured = capsys.readouterr()
+
+    assert "removing the lock file" not in captured.out
