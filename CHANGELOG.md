@@ -3,21 +3,7 @@
 <!--next-version-placeholder-->
 
 ## v0.5.2 (2023-11-08)
-
-
-
-## v0.5.2-beta.3 (2023-11-08)
-
-
-
-## v0.5.2-beta.2 (2023-11-08)
-
-
-
-## v0.5.2-beta.1 (2023-11-08)
-
 ### Fix
-
 * **pgbouncer:** Set search path (schema) to public after restoring db ([`c70ccb0`](https://github.com/educationwarehouse/migrate/commit/c70ccb0de377b35037de79d32a3d6ccadbf870f2))
 
 ## v0.5.1 (2023-08-02)
