@@ -70,12 +70,12 @@ T_Dal = typing.TypeVar("T_Dal", bound=DAL)
 
 @typing.overload
 def setup_db(
-    migrate: bool = False,
-    migrate_enabled: bool = False,
-    appname: str = " ".join(sys.argv),
-    long_running: bool | int = False,
-    dal_class: None = None,
-    impl_feat_table_name: Optional[str] = None,
+        migrate: bool = False,
+        migrate_enabled: bool = False,
+        appname: str = " ".join(sys.argv),
+        long_running: bool | int = False,
+        dal_class: None = None,
+        impl_feat_table_name: Optional[str] = None,
 ) -> DAL:
     """
     If `dal_class` is not filled in, a normal DAL instance is returned.
@@ -84,12 +84,12 @@ def setup_db(
 
 @typing.overload
 def setup_db(
-    migrate: bool = False,
-    migrate_enabled: bool = False,
-    appname: str = " ".join(sys.argv),
-    long_running: bool | int = False,
-    dal_class: typing.Type[T_Dal] = DAL,
-    impl_feat_table_name: Optional[str] = None,
+        migrate: bool = False,
+        migrate_enabled: bool = False,
+        appname: str = " ".join(sys.argv),
+        long_running: bool | int = False,
+        dal_class: typing.Type[T_Dal] = DAL,
+        impl_feat_table_name: Optional[str] = None,
 ) -> T_Dal:
     """
     If `dal_class` is passed, an instance of that class will be returned.
@@ -97,12 +97,12 @@ def setup_db(
 
 
 def setup_db(
-    migrate: bool = False,
-    migrate_enabled: bool = False,
-    appname: str = " ".join(sys.argv),
-    long_running: bool | int = False,
-    dal_class: typing.Type[T_Dal] | None = None,
-    impl_feat_table_name: Optional[str] = None,
+        migrate: bool = False,
+        migrate_enabled: bool = False,
+        appname: str = " ".join(sys.argv),
+        long_running: bool | int = False,
+        dal_class: typing.Type[T_Dal] | None = None,
+        impl_feat_table_name: Optional[str] = None,
 ) -> T_Dal | DAL:
     """
 
@@ -189,8 +189,8 @@ Migration: typing.TypeAlias = typing.Callable[[DAL], bool]
 
 @typing.overload
 def migration(
-    func: Migration,
-    requires: list[Migration] | Migration | None = None,
+        func: Migration,
+        requires: list[Migration] | Migration | None = None,
 ) -> Migration:
     """
     Allows calling @migration without parens.
@@ -199,8 +199,8 @@ def migration(
 
 @typing.overload
 def migration(
-    func: None = None,
-    requires: list[Migration] | Migration | None = None,
+        func: None = None,
+        requires: list[Migration] | Migration | None = None,
 ) -> typing.Callable[[Migration], Migration]:
     """
     Allows calling @migration() with parens.
@@ -208,8 +208,8 @@ def migration(
 
 
 def migration(
-    func: Migration | None = None,
-    requires: list[Migration] | Migration | None = None,
+        func: Migration | None = None,
+        requires: list[Migration] | Migration | None = None,
 ) -> Migration | typing.Callable[[Migration], Migration]:
     """
     Decorator to register a function as a migration function.
@@ -283,7 +283,7 @@ def should_run(db: DAL, name: str) -> bool:
     return row.installed is False if row else True
 
 
-def recover_database_from_backup(set_schema: str | bool = "public"):
+def recover_database_from_backup(set_schema: Optional[str] = None):
     """
     Handles 3 situations:
     a) /data/database_to_restore.sql exists:
@@ -302,6 +302,7 @@ def recover_database_from_backup(set_schema: str | bool = "public"):
 
     """
     config = get_config()
+    set_schema = set_schema or config.schema
 
     print("RECOVER_DATABASE_FROM_BACKEND started ")
     prepared_sql_path = pathlib.Path(config.database_to_restore)
@@ -508,6 +509,7 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
     database_to_restore: str = "/data/database_to_restore.sql"
     migrate_table: str = "ewh_implemented_features"
     flag_location: str = "/flags"
+    schema: str | bool = "public"
     create_flag_location: bool = False
 
     def __repr__(self):
@@ -619,7 +621,6 @@ def console_hook():  # pragma: no cover
     lockfile: '/flags/migrate-{os.environ["SCHEMA_VERSION"]}.complete'
     """
     _console_hook(sys.argv[1:])
-
 
 # ------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------
