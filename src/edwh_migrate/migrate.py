@@ -568,14 +568,17 @@ def _get_config():
     """
     First try config from env, then fallback to pyproject.
     """
-    with contextlib.suppress(configuraptor.errors.ConfigError):
+    try:
         return Config.from_env(load_dotenv=True)
-
-    with contextlib.suppress(configuraptor.errors.ConfigError, FileNotFoundError):
-        return Config.load("pyproject.toml", key="tool.migrate")
-
-    # final guess:
-    return Config.load()
+    except configuraptor.errors.ConfigError as e1:
+        try:
+            return Config.load("pyproject.toml", key="tool.migrate")
+        except configuraptor.errors.ConfigError as e2:
+            # something went wrong in both, so raise stack:
+            raise e2 from e1
+        except FileNotFoundError:
+            # no pyproject.toml, so just raise original error
+            raise e1
 
 
 @typing.overload
