@@ -16,9 +16,11 @@ When writing new tasks, make sure:
 
 """
 from .migrate import (
+    Config,
     InvalidConfigException,
     UnknownConfigException,
     activate_migrations,
+    get_config,
     migration,
     recover_database_from_backup,
     registered_functions,
@@ -33,4 +35,6 @@ __all__ = [
     "recover_database_from_backup",
     "InvalidConfigException",
     "UnknownConfigException",
+    "Config",
+    "get_config",
 ]
