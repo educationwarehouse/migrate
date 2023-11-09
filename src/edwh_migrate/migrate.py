@@ -104,6 +104,13 @@ T_Dal = typing.TypeVar("T_Dal", bound=DAL)
 def define_ewh_implemented_features(db: DAL, rname: str = "ewh_implemented_features") -> Table:
     """
     Define the required table.
+
+    Can be used by pydal2sql to generate a CREATE TABLE statement:
+    Example:
+        pydal2sql create src/edwh_migrate/migrate.py
+            --magic
+            --function 'define_ewh_implemented_features(db, "custom_rname")'
+            --dialect sqlite
     """
     return db.define_table(
         "ewh_implemented_features",
