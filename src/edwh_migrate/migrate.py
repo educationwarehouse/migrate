@@ -3,6 +3,8 @@
 #
 # SPDX-License-Identifier: MIT
 """
+This file contains most of the (core) code.
+
 When writing new tasks, make sure:
  * ! executesql() returns tuples, explicitly use as_dict or as_ordered_dict to have easy acces for results
  * ! arguments and placeholders use the `where gid = %(gid)s` syntax, where gid should be a key in the `placeholders`
@@ -11,8 +13,8 @@ When writing new tasks, make sure:
    - public."user"
    - public.item
    forget and fail...
-
 """
+
 import contextlib
 import datetime
 import importlib
@@ -41,28 +43,58 @@ from pydal import DAL, Field
 registered_functions = OrderedDict()
 
 
-class UnknownConfigException(BaseException):
-    pass
+class BaseEDWHMigrateException(BaseException):
+    """
+    Most top-level exception class for this module.
+
+    Not caught by `except Exception`.
+    """
 
 
-class InvalidConfigException(BaseException):
-    pass
+class EDWHMigrateException(BaseEDWHMigrateException, Exception):
+    """
+    Common exception class for this module.
+
+    Is caught by `except Exception`.
+    """
 
 
-class DatabaseNotYetInitialized(BaseException):
-    pass
+class UnknownConfigException(BaseEDWHMigrateException):
+    """
+    Not currently used.
+    """
 
 
-class RequimentsNotMet(BaseException):
-    pass
+class InvalidConfigException(BaseEDWHMigrateException):
+    """
+    Thrown when not all requires settings (e.g. database uri) can be found.
+    """
 
 
-class MigrateLockExists(Exception):
-    pass
+class DatabaseNotYetInitialized(BaseEDWHMigrateException):
+    """
+    Thrown when trying to access the implemented features table before setting it up.
+    """
 
 
-class MigrationFailed(Exception):
-    pass
+class RequimentsNotMet(BaseEDWHMigrateException):
+    """
+    Thrown when a migration depends on some requirements, which have not been succesfully installed yet.
+    """
+
+
+class MigrateLockExists(EDWHMigrateException):
+    """
+    Thrown when trying to migrate but a lock file is already present.
+
+    This indicates the migration has already happened.
+    """
+
+
+class MigrationFailed(EDWHMigrateException):
+    """
+    Raised when a migration fails for any reason.
+    """
 
 
 T_Dal = typing.TypeVar("T_Dal", bound=DAL)
@@ -105,7 +137,6 @@ def setup_db(
     impl_feat_table_name: Optional[str] = None,
 ) -> T_Dal | DAL:
     """
-
     Connect to the database and return a DAL object.
 
     When using postgres, the application name is set to the appname argument, long lasting connections are enabled
@@ -130,7 +161,6 @@ def setup_db(
 
     :return: database connection
     """
-
     if dal_class is None:
         # default: pydal.DAL
         # (alternative: py4web.core.DAL)
@@ -189,21 +219,25 @@ Migration: typing.TypeAlias = typing.Callable[[DAL], bool]
 
 @typing.overload
 def migration(
-    func: Migration,
+    func: None = None,
     requires: list[Migration] | Migration | None = None,
-) -> Migration:
+) -> typing.Callable[[Migration], Migration]:
     """
-    Allows calling @migration without parens.
+    Allows calling the decorator with parentheses.
+
+    Example:
+        @migration()
+        def my_migration_1(): ...
     """
 
 
 @typing.overload
 def migration(
-    func: None = None,
+    func: Migration,
     requires: list[Migration] | Migration | None = None,
-) -> typing.Callable[[Migration], Migration]:
+) -> Migration:
     """
-    Allows calling @migration() with parens.
+    Allows calling @migration without parens.
     """
 
 
@@ -214,16 +248,14 @@ def migration(
     """
     Decorator to register a function as a migration function.
 
-    example:
-
-    @migration
-    def my_migration_function(db):
-        db.executesql("select 1")
-        return True # or False, if the migration failed. On true db.commit() will be performed.
-
     :param func: function to register as a migration function
     :param requires: list of function names that need to be applied before this function can be applied.
 
+    Example:
+        @migration
+        def my_migration_function(db):
+            db.executesql("select 1")
+            return True # or False, if the migration failed. On true db.commit() will be performed.
     """
     if func is None and requires:
         # requires is given, so return the decorator that will test if the requirements are met before
@@ -285,6 +317,8 @@ def should_run(db: DAL, name: str) -> bool:
 
 def recover_database_from_backup(set_schema: Optional[str | bool] = None):
     """
+    Recover a database backup.
+
     Handles 3 situations:
     a) /data/database_to_restore.sql exists:
        just recover the database (uses cat)
@@ -296,6 +330,7 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None):
         tries to recover using an un7zipped file,
         possibly downloaded from backblaze, but this code
         is stale.
+
     Effectively running something like:
         A,B)  7z x -so -p"secret" db.7z | psql -h  127.0.0.1 -U postgres -d backend
           C) cat /data/database_to_restore.sql | psql -h  127.0.0.1 -U postgres -d backend
@@ -355,7 +390,9 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None):
 
 
 def activate_migrations():
-    """Start the migration process, don't wait for a lock"""
+    """
+    Start the migration process, don't wait for a lock.
+    """
     config = get_config()
 
     started = time.time()
@@ -502,6 +539,13 @@ def schema_versioned_lock_file(flag_location: str | Path | None = None, create_f
 
 
 class Config(configuraptor.TypedConfig, configuraptor.Singleton):
+    """
+    These options can be set via pyproject.toml or .env (or a combination).
+
+    Use the [tool.migrate] key.
+    Either - or _ can be used in the keys and they can be in any case.
+    """
+
     migrate_uri: str
     schema_version: Optional[str]
     redis_host: Optional[str]
@@ -513,6 +557,9 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
     create_flag_location: bool = False
 
     def __repr__(self):
+        """
+        Represent the class by dumping its data.
+        """
         data = asdict(self, with_top_level_key=False)
         return f"<Config{data}>"
 
@@ -547,10 +594,10 @@ def get_config(key: None = None) -> Config:
 
 def get_config(key: Optional[str] = None) -> Config | typing.Any:
     """
-    Get the whole config or a specific key
+    Get the whole config or a specific key.
     """
     config = _get_config()
-    # config.update_from_env()  # extend toml defaults with env secrets
+    config.update_from_env()  # extend toml defaults with env secrets
 
     if key:
         return getattr(config, key)

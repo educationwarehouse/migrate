@@ -3,6 +3,8 @@
 #
 # SPDX-License-Identifier: MIT
 """
+This file exposes the most important functions and classes.
+
 When writing new tasks, make sure:
  * ! executesql() returns tuples, explicitly use as_dict or as_ordered_dict to have easy acces for results
  * ! arguments and placeholders use the `where gid = %(gid)s` syntax, where gid should be a key in the `placeholders`

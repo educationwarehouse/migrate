@@ -186,6 +186,19 @@ pythonpath = [
     "src",
 ]
 
+[tool.pydocstyle]
+match-dir = '(?!venv)[^\.].*'
+add_select = [
+    "D213", # = Multi-line docstring summary should start at the second line
+    "D416", # = Google-style section name checks.
+    "D417", # = Missing argument descriptions in the docstring
+]
+add_ignore = [
+    "D200", # = One-line docstring should fit on one line with quotes
+    "D212", # = Multi-line docstring summary should start at the first line
+    "D401", # = Force imperative mood
+]
+
 [tool.su6]
 # every checker:
 directory = "src"
