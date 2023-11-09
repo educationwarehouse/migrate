@@ -36,9 +36,10 @@ import plumbum
 import psycopg2
 import psycopg2.errors
 import redis
-from configuraptor import asdict
-from configuraptor.errors import ConfigErrorMissingKey
+from configuraptor import alias, asdict, postpone
+from configuraptor.errors import ConfigErrorMissingKey, IsPostponedError
 from pydal import DAL, Field
+from pydal.objects import Table
 
 registered_functions = OrderedDict()
 
@@ -100,6 +101,19 @@ class MigrationFailed(EDWHMigrateException):
 T_Dal = typing.TypeVar("T_Dal", bound=DAL)
 
 
+def define_ewh_implemented_features(db: DAL, rname: str = "ewh_implemented_features") -> Table:
+    """
+    Define the required table.
+    """
+    return db.define_table(
+        "ewh_implemented_features",
+        Field("name", unique=True),
+        Field("installed", "boolean", default=False),
+        Field("last_update_dttm", "datetime", default=datetime.datetime.now),
+        rname=rname,
+    )
+
+
 @typing.overload
 def setup_db(
     migrate: bool = False,
@@ -108,6 +122,7 @@ def setup_db(
     long_running: bool | int = False,
     dal_class: None = None,
     impl_feat_table_name: Optional[str] = None,
+    folder: Optional[str] = None,
 ) -> DAL:
     """
     If `dal_class` is not filled in, a normal DAL instance is returned.
@@ -122,6 +137,7 @@ def setup_db(
     long_running: bool | int = False,
     dal_class: typing.Type[T_Dal] = DAL,
     impl_feat_table_name: Optional[str] = None,
+    folder: Optional[str] = None,
 ) -> T_Dal:
     """
     If `dal_class` is passed, an instance of that class will be returned.
@@ -135,6 +151,7 @@ def setup_db(
     long_running: bool | int = False,
     dal_class: typing.Type[T_Dal] | None = None,
     impl_feat_table_name: Optional[str] = None,
+    folder: Optional[str] = None,
 ) -> T_Dal | DAL:
     """
     Connect to the database and return a DAL object.
@@ -158,6 +175,7 @@ def setup_db(
         using pgpool set_client_idle_limit
     :param dal_class: optional DAL class, will use DAL if not given
     :param impl_feat_table_name: optional custom table name for ewh_implemented_features
+    :param folder: directory to store sql log, table files etc
 
     :return: database connection
     """
@@ -170,7 +188,7 @@ def setup_db(
         config = get_config()
 
         uri = config.migrate_uri
-    except (KeyError, ConfigErrorMissingKey) as e:
+    except (KeyError, ConfigErrorMissingKey, IsPostponedError) as e:
         raise InvalidConfigException("$MIGRATE_URI not found in environment.") from e
     is_postgres = uri.startswith("postgres")
     driver_args: dict[str, typing.Any] = {}
@@ -185,6 +203,7 @@ def setup_db(
         migrate_enabled=migrate_enabled,
         driver_args=driver_args,
         pool_size=1,
+        folder=folder or config.db_folder,
     )
     if is_postgres and long_running:
         # https://www.pgpool.net/docs/latest/en/html/sql-pgpool-set.html
@@ -196,15 +215,8 @@ def setup_db(
             db.executesql(f"PGPOOL SET client_idle_limit = {long_running if str(long_running).isdigit() else 3600};")
             db.rollback()
 
-    impl_feat_table_name = impl_feat_table_name or config.migrate_table
+    define_ewh_implemented_features(db, impl_feat_table_name or config.migrate_table)
 
-    db.define_table(
-        "ewh_implemented_features",
-        Field("name", unique=True),
-        Field("installed", "boolean", default=False),
-        Field("last_update_dttm", "datetime", default=datetime.datetime.now()),
-        rname=impl_feat_table_name,
-    )
     try:
         db(db.ewh_implemented_features).count()
     except (psycopg2.errors.UndefinedTable, sqlite3.OperationalError) as e:
@@ -546,7 +558,7 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
     Either - or _ can be used in the keys and they can be in any case.
     """
 
-    migrate_uri: str
+    migrate_uri: str = postpone()
     schema_version: Optional[str]
     redis_host: Optional[str]
     migrate_cat_command: Optional[str]
@@ -555,6 +567,9 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
     flag_location: str = "/flags"
     schema: str | bool = "public"
     create_flag_location: bool = False
+    db_folder: Optional[str] = None
+
+    db_uri: str = alias("migrate_uri")
 
     def __repr__(self):
         """
@@ -569,16 +584,9 @@ def _get_config():
     First try config from env, then fallback to pyproject.
     """
     try:
+        return Config.load("pyproject.toml", key="tool.migrate")
+    except (configuraptor.errors.ConfigError, FileNotFoundError):
         return Config.from_env(load_dotenv=True)
-    except configuraptor.errors.ConfigError as e1:
-        try:
-            return Config.load("pyproject.toml", key="tool.migrate")
-        except configuraptor.errors.ConfigError as e2:
-            # something went wrong in both, so raise stack:
-            raise e2 from e1
-        except FileNotFoundError:
-            # no pyproject.toml, so just raise original error
-            raise e1
 
 
 @typing.overload

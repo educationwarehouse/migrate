@@ -27,7 +27,7 @@ dependencies = [
     'psycopg2-binary',
     'redis',
     'python-dotenv',
-    'configuraptor>=1.22',
+    'configuraptor>=1.23',
 ]
 
 [project.optional-dependencies]

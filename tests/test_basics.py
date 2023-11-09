@@ -1,6 +1,7 @@
 import os
 import pathlib
 import shutil
+import tempfile
 
 import plumbum
 import pydal
@@ -241,9 +242,12 @@ def test_config():
     assert "<Config{" in repr(config)
 
 
-def test_schema_versioned_lock_file(capsys):
+def test_schema_versioned_lock_file(capsys, clean_migrate):
     config = get_config()
-    flag_dir = pathlib.Path("/tmp/test_flag_dir")
+
+    config.flag_location = "/tmp/test_flag_dir"
+
+    flag_dir = pathlib.Path(config.flag_location)
     if flag_dir.exists():
         [_.unlink() for _ in flag_dir.glob("*")]
         flag_dir.rmdir()
@@ -286,3 +290,32 @@ def test_schema_versioned_lock_file(capsys):
     captured = capsys.readouterr()
 
     assert "removing the lock file" not in captured.out
+
+
+@pytest.fixture()
+def fixture_temp_chdir():
+    with tempfile.TemporaryDirectory() as _dir:
+        cwd = pathlib.Path(_dir)
+        with chdir(cwd):
+            yield cwd
+
+
+def test_without_migrate_uri_but_with_db_uri_and_folder(fixture_temp_chdir, clean_migrate):
+    os.environ["DB_URI"] = "sqlite://storage.sqlite"
+
+    db_folder = fixture_temp_chdir / "database"
+    db_folder.mkdir()
+
+    os.environ["DB_FOLDER"] = str(db_folder)
+
+    migrate.setup_db(migrate_enabled=True, migrate=True)
+
+    assert db_folder.exists()
+
+    assert plumbum.local["ls"](os.getcwd()).strip() == "database"
+
+    db_ls = plumbum.local["ls"](db_folder)
+
+    assert "ewh_implemented_features.table" in db_ls
+    assert "sql.log" in db_ls
+    assert "storage.sqlite" in db_ls
