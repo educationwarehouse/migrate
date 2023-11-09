@@ -1,17 +1,22 @@
 import os
 import pathlib
 import shutil
-from contextlib_chdir import chdir
 
 import plumbum
 import pydal
 import pytest
 from configuraptor import Singleton
+from contextlib_chdir import chdir
 from pydal import DAL
 
 from src.edwh_migrate import migrate, recover_database_from_backup
-from src.edwh_migrate.migrate import get_config, schema_versioned_lock_file, MigrateLockExists, MigrationFailed
 from src.edwh_migrate.__about__ import __version__
+from src.edwh_migrate.migrate import (
+    MigrateLockExists,
+    MigrationFailed,
+    get_config,
+    schema_versioned_lock_file,
+)
 
 
 def test_version():
@@ -143,7 +148,7 @@ def test_dummy_is_not_migrated_twice(tmp_just_implemented_features_sqlite_db_fil
     assert result is True, "the dummy returning True should have been marked as successful"
     result = migrate.activate_migrations()
     assert (
-            "already installed." in capsys.readouterr().out
+        "already installed." in capsys.readouterr().out
     ), "the dummy returning True should have been marked as successful"
     db = migrate.setup_db()
     # dump_db(db, echo=True)
@@ -198,7 +203,7 @@ def test_dependency_failure(clean_migrate, tmp_just_implemented_features_sqlite_
     dump_db(db, echo=True)
     assert db(db.ewh_implemented_features.installed == True).count() == 0, "requirement failed, no succes possible"
     assert (
-            db(db.ewh_implemented_features.installed == False).count() == 1
+        db(db.ewh_implemented_features.installed == False).count() == 1
     ), "because of the exception, `dependent` is never written to the database. "
 
 
@@ -235,6 +240,7 @@ def test_config():
 
     assert "<Config{" in repr(config)
 
+
 def test_schema_versioned_lock_file(capsys):
     config = get_config()
     flag_dir = pathlib.Path("/tmp/test_flag_dir")
@@ -260,7 +266,11 @@ def test_schema_versioned_lock_file(capsys):
         with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=False) as lock:
             pass
 
-    config.schema_version = "2"
+    # config.schema_version = "2"
+    os.environ["SCHEMA-VERSION"] = "2"
+    config.update_from_env()
+
+    assert config.schema_version == "2"
 
     with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=False) as lock:
         raise MigrationFailed()
