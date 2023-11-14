@@ -111,6 +111,7 @@ def define_ewh_implemented_features(db: DAL, rname: str = "ewh_implemented_featu
             --magic
             --function 'define_ewh_implemented_features(db, "custom_rname")'
             --dialect sqlite
+            --format edwh-migrate
     """
     return db.define_table(
         "ewh_implemented_features",
