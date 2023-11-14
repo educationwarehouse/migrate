@@ -2,6 +2,9 @@
 
 <!--next-version-placeholder-->
 
+## v0.6.0 (2023-11-14)
+
+
 ## v0.6.0-beta.1 (2023-11-14)
 ### Feature
 * `db_folder` from config and `db_uri` as alias for `migrate_uri` ([`3530cfc`](https://github.com/educationwarehouse/migrate/commit/3530cfcf1a08e155ff01a8869abda650bede3712))
