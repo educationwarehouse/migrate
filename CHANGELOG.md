@@ -2,6 +2,28 @@
 
 <!--next-version-placeholder-->
 
+## v0.6.0-beta.1 (2023-11-14)
+### Feature
+* `db_folder` from config and `db_uri` as alias for `migrate_uri` ([`3530cfc`](https://github.com/educationwarehouse/migrate/commit/3530cfcf1a08e155ff01a8869abda650bede3712))
+* Better error handling by replacing `suppress` with normal try-catch (-> more informative tracebacks) ([`1dc044f`](https://github.com/educationwarehouse/migrate/commit/1dc044fd8c66389bb96a0ade69e62ea3fb924997))
+* `config` can now be imported from the package directly ([`c06ab11`](https://github.com/educationwarehouse/migrate/commit/c06ab11a179919d4ac12dd03ceb91ec428033595))
+* **schema:** Choose schema from config (name or False) ([`c877f36`](https://github.com/educationwarehouse/migrate/commit/c877f360bbf34ba5105b6834c80f54579c35cfce))
+* Custom flag directory + refactor console hooks to use list of args (after 0) ([`132de79`](https://github.com/educationwarehouse/migrate/commit/132de79caa79fc9f2ea276abf22e24083d65b6c4))
+* **mypy:** Improved type hints for @migration decorator ([`afa987a`](https://github.com/educationwarehouse/migrate/commit/afa987af1ca8cc9e7a4d65d047b0882f40999cec))
+* Improved config via configuraptor; allow chaging MIGRATE_TABLE from ewh_implemented_features ([`caadaed`](https://github.com/educationwarehouse/migrate/commit/caadaedaec90838255727d76cbbb8b3e1e91710c))
+
+### Fix
+* More pytests + coverage ([`b2eefd2`](https://github.com/educationwarehouse/migrate/commit/b2eefd22771e5569432652e5925a8ab312544e69))
+* **tests:** More test coverage and minor fix in backup restore function ([`41eb4bd`](https://github.com/educationwarehouse/migrate/commit/41eb4bd0117ecf1e3c26f49e6d5bb546372adc2d))
+* Tests should import from src so you don't have to keep installing the module to test it ([`8d5c886`](https://github.com/educationwarehouse/migrate/commit/8d5c886dae902fe2a9e7710631595243f4ec673e))
+
+### Documentation
+* Show example with pydal2sql to create CREATE TABLE for ewh_implemented_features ([`ac04306`](https://github.com/educationwarehouse/migrate/commit/ac0430604b6302f099ec541b2a7d5b7bb5b8ee1c))
+* Added example via docker-compose ([`9a8de23`](https://github.com/educationwarehouse/migrate/commit/9a8de23c0675beb09c4599104efa7f95552b586d))
+* Added new config keys and included usage example ([`13fdd6c`](https://github.com/educationwarehouse/migrate/commit/13fdd6c1aa12f3142d328424791d63dc9fc2590d))
+* **docstrings:** Make pydocstyle happy ([`a899797`](https://github.com/educationwarehouse/migrate/commit/a899797e4c9ee27745738bedee393cbafb64277a))
+* **changelog:** Remove prereleases from changelog ([`70bcbbe`](https://github.com/educationwarehouse/migrate/commit/70bcbbed5fdcd83c39fec03aee693c7ba913a3e2))
+
 ## v0.5.2 (2023-11-08)
 ### Fix
 * **pgbouncer:** Set search path (schema) to public after restoring db ([`c70ccb0`](https://github.com/educationwarehouse/migrate/commit/c70ccb0de377b35037de79d32a3d6ccadbf870f2))

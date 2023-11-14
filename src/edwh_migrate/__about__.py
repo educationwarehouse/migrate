@@ -6,4 +6,4 @@ This file stores the package version.
 #
 # SPDX-License-Identifier: MIT
 
-__version__ = "0.5.2"
+__version__ = "0.6.0-beta.1"
