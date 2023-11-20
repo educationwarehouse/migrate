@@ -32,12 +32,14 @@ from pathlib import Path
 from typing import Optional
 
 import configuraptor
+import dotenv
 import plumbum
 import psycopg2
 import psycopg2.errors
 import redis
 from configuraptor import alias, asdict, postpone
 from configuraptor.errors import ConfigErrorMissingKey, IsPostponedError
+from dotenv import find_dotenv
 from pydal import DAL, Field
 from pydal.objects import Table
 
@@ -591,10 +593,11 @@ def _get_config():
     """
     First try config from env, then fallback to pyproject.
     """
+    dotenv.load_dotenv(find_dotenv(usecwd=True))
     try:
         return Config.load("pyproject.toml", key="tool.migrate")
     except (configuraptor.errors.ConfigError, FileNotFoundError):
-        return Config.from_env(load_dotenv=True)
+        return Config.from_env(load_dotenv=False)
 
 
 @typing.overload
