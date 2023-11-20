@@ -2,6 +2,10 @@
 
 <!--next-version-placeholder-->
 
+## v0.6.1 (2023-11-20)
+### Fix
+* Still load .env if pyproject.toml exists, so we can combine those configs ([`69c8e73`](https://github.com/educationwarehouse/migrate/commit/69c8e73a0fbcce01a14ba3f32c041c8c0db78270))
+
 ## v0.6.0 (2023-11-14)
 ### Feature
 * Improved config via configuraptor; allow chaging MIGRATE_TABLE from ewh_implemented_features ([`caadaed`](https://github.com/educationwarehouse/migrate/commit/caadaedaec90838255727d76cbbb8b3e1e91710c))
