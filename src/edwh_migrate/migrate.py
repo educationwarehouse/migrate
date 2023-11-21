@@ -122,7 +122,7 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
 
     db_uri: str = alias("migrate_uri")
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         """
         Represent the class by dumping its data.
         """
@@ -130,7 +130,7 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
         return f"<Config{data}>"
 
 
-def _get_config():
+def _get_config() -> Config:
     """
     First try config from env, then fallback to pyproject.
     """
@@ -345,7 +345,7 @@ def migration(
 
         def decorator(decorated: Migration) -> Migration:
             @wraps(decorated)
-            def with_requires(*p, **kwp):
+            def with_requires(*p: typing.Any, **kwp: typing.Any) -> bool:
                 # check requirements
                 db = setup_db()
                 installed = (
@@ -390,7 +390,7 @@ def should_run(db: DAL, name: str) -> bool:
     return row.installed is False if row else True
 
 
-def recover_database_from_backup(set_schema: Optional[str | bool] = None, config: Optional[Config] = None):
+def recover_database_from_backup(set_schema: Optional[str | bool] = None, config: Optional[Config] = None) -> None:
     """
     Recover a database backup.
 
@@ -464,7 +464,7 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None, config
         cmd()
 
 
-def activate_migrations(config: Optional[Config] = None):
+def activate_migrations(config: Optional[Config] = None) -> bool:
     """
     Start the migration process, don't wait for a lock.
     """
@@ -572,7 +572,7 @@ def activate_migrations(config: Optional[Config] = None):
 @contextlib.contextmanager
 def schema_versioned_lock_file(
     flag_location: str | Path | None = None, create_flag_location: bool = False, config: Optional[Config] = None
-):
+) -> typing.Generator[Path | None, None, None]:
     """
     Context manager that creates a lock file for the current schema version.
     """
@@ -615,7 +615,7 @@ def schema_versioned_lock_file(
                 raise
 
 
-def _console_hook(args: list[str], config: Optional[Config] = None):  # pragma: no cover
+def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # pragma: no cover
     if "-h" in args or "--help" in args:
         print(
             """
@@ -679,7 +679,7 @@ def _console_hook(args: list[str], config: Optional[Config] = None):  # pragma: 
             raise MigrationFailed("Not every migration succeeded.")
 
 
-def console_hook():  # pragma: no cover
+def console_hook() -> None:  # pragma: no cover
     """
     Activated by migrate shell script, sets a lock file before activate_migrations.
 
