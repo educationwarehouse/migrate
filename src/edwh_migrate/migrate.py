@@ -578,6 +578,7 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
     schema: str | bool = "public"
     create_flag_location: bool = False
     db_folder: Optional[str] = None
+    migrations_file: str = "migrations.py"
 
     db_uri: str = alias("migrate_uri")
 
@@ -647,13 +648,15 @@ def _console_hook(args: list[str]):  # pragma: no cover
         )
         exit(0)
 
+    config = get_config()
+
     # get the versioned lock file path, as the config performs the environment variable expansion
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file():
         if args:
             print(f"Using argument {args[0]} as a reference to the migrations file.")
             # use the first argument as a reference to the migrations file
             # or the folder where the migrations file is stored
-            arg = pathlib.Path(args[0])
+            arg = Path(args[0])
             if arg.exists() and arg.is_file():
                 print(f"importing migrations from {arg}")
                 sys.path.insert(0, str(arg.parent))
@@ -667,6 +670,12 @@ def _console_hook(args: list[str]):  # pragma: no cover
             else:
                 print(f"ERROR: no migrations found at {arg}", file=sys.stderr)
                 exit(1)
+        elif config.migrations_file and (arg := Path(config.migrations_file)) and arg.exists():
+            print(f"importing migrations from {arg}")
+            sys.path.insert(0, str(arg.parent))
+            # importing the migrations.py file will register the functions
+            importlib.import_module(arg.stem)
+
         elif Path("migrations.py").exists():
             print("migrations.py exists, importing @migration decorated functions.")
             sys.path.insert(0, os.getcwd())
