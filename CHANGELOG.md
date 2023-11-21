@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.6.2 (2023-11-21)
+### Fix
+* Expose console_hook for external library usage ([`56ae0b6`](https://github.com/educationwarehouse/migrate/commit/56ae0b69f407847fa21e4754e2770d7c0ad3ca88))
+* Every function can now be passed an existing config. ([`efc4c41`](https://github.com/educationwarehouse/migrate/commit/efc4c41ed985fbea6722b6dea4b0ace776e20939))
+* You can now choose a migrations file in the config (toml or env) ([`2341fab`](https://github.com/educationwarehouse/migrate/commit/2341faba01cd5c8e77461e5c53e3df6ed59176a6))
+
 ## v0.6.1 (2023-11-20)
 ### Fix
 * Still load .env if pyproject.toml exists, so we can combine those configs ([`69c8e73`](https://github.com/educationwarehouse/migrate/commit/69c8e73a0fbcce01a14ba3f32c041c8c0db78270))
