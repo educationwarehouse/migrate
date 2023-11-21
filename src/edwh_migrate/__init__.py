@@ -15,10 +15,9 @@ When writing new tasks, make sure:
    forget and fail...
 
 """
+from .migrate import Config, InvalidConfigException, UnknownConfigException
+from .migrate import _console_hook as console_hook
 from .migrate import (
-    Config,
-    InvalidConfigException,
-    UnknownConfigException,
     activate_migrations,
     get_config,
     migration,
@@ -37,4 +36,5 @@ __all__ = [
     "UnknownConfigException",
     "Config",
     "get_config",
+    "console_hook",
 ]
