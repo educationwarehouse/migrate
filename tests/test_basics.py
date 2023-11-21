@@ -237,7 +237,7 @@ def test_config():
     config = get_config()
     assert config is get_config()  # singleton
 
-    assert config.database_to_restore == get_config("database_to_restore")
+    assert config.database_to_restore is get_config().database_to_restore
 
     assert "<Config{" in repr(config)
 

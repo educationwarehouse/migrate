@@ -100,6 +100,57 @@ class MigrationFailed(EDWHMigrateException):
     """
 
 
+class Config(configuraptor.TypedConfig, configuraptor.Singleton):
+    """
+    These options can be set via pyproject.toml or .env (or a combination).
+
+    Use the [tool.migrate] key.
+    Either - or _ can be used in the keys and they can be in any case.
+    """
+
+    migrate_uri: str = postpone()
+    schema_version: Optional[str]
+    redis_host: Optional[str]
+    migrate_cat_command: Optional[str]
+    database_to_restore: str = "/data/database_to_restore.sql"
+    migrate_table: str = "ewh_implemented_features"
+    flag_location: str = "/flags"
+    schema: str | bool = "public"
+    create_flag_location: bool = False
+    db_folder: Optional[str] = None
+    migrations_file: str = "migrations.py"
+
+    db_uri: str = alias("migrate_uri")
+
+    def __repr__(self):
+        """
+        Represent the class by dumping its data.
+        """
+        data = asdict(self, with_top_level_key=False)
+        return f"<Config{data}>"
+
+
+def _get_config():
+    """
+    First try config from env, then fallback to pyproject.
+    """
+    dotenv.load_dotenv(find_dotenv(usecwd=True))
+    try:
+        return Config.load("pyproject.toml", key="tool.migrate")
+    except (configuraptor.errors.ConfigError, FileNotFoundError):
+        return Config.from_env(load_dotenv=False)
+
+
+def get_config() -> Config:
+    """
+    Get the whole config or a specific key.
+    """
+    config = _get_config()
+    config.update_from_env()  # extend toml defaults with env secrets
+
+    return config
+
+
 T_Dal = typing.TypeVar("T_Dal", bound=DAL)
 
 
@@ -162,6 +213,7 @@ def setup_db(
     dal_class: typing.Type[T_Dal] | None = None,
     impl_feat_table_name: Optional[str] = None,
     folder: Optional[str] = None,
+    config: Optional[Config] = None,
 ) -> T_Dal | DAL:
     """
     Connect to the database and return a DAL object.
@@ -186,6 +238,7 @@ def setup_db(
     :param dal_class: optional DAL class, will use DAL if not given
     :param impl_feat_table_name: optional custom table name for ewh_implemented_features
     :param folder: directory to store sql log, table files etc
+    :param config: existing Config object. If not passed, get_config will be called.
 
     :return: database connection
     """
@@ -195,7 +248,7 @@ def setup_db(
         dal_class = DAL
 
     try:
-        config = get_config()
+        config = config or get_config()
 
         uri = config.migrate_uri
     except (KeyError, ConfigErrorMissingKey, IsPostponedError) as e:
@@ -337,7 +390,7 @@ def should_run(db: DAL, name: str) -> bool:
     return row.installed is False if row else True
 
 
-def recover_database_from_backup(set_schema: Optional[str | bool] = None):
+def recover_database_from_backup(set_schema: Optional[str | bool] = None, config: Optional[Config] = None):
     """
     Recover a database backup.
 
@@ -358,7 +411,7 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None):
           C) cat /data/database_to_restore.sql | psql -h  127.0.0.1 -U postgres -d backend
 
     """
-    config = get_config()
+    config = config or get_config()
     set_schema = set_schema or config.schema
 
     print("RECOVER_DATABASE_FROM_BACKEND started ")
@@ -411,11 +464,11 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None):
         cmd()
 
 
-def activate_migrations():
+def activate_migrations(config: Optional[Config] = None):
     """
     Start the migration process, don't wait for a lock.
     """
-    config = get_config()
+    config = config or get_config()
 
     started = time.time()
     while time.time() - started < 600:
@@ -517,11 +570,13 @@ def activate_migrations():
 
 
 @contextlib.contextmanager
-def schema_versioned_lock_file(flag_location: str | Path | None = None, create_flag_location: bool = False):
+def schema_versioned_lock_file(
+    flag_location: str | Path | None = None, create_flag_location: bool = False, config: Optional[Config] = None
+):
     """
     Context manager that creates a lock file for the current schema version.
     """
-    config = get_config()
+    config = config or get_config()
 
     flag_location = Path(flag_location or config.flag_location)
     if not flag_location.exists():
@@ -560,75 +615,7 @@ def schema_versioned_lock_file(flag_location: str | Path | None = None, create_f
                 raise
 
 
-class Config(configuraptor.TypedConfig, configuraptor.Singleton):
-    """
-    These options can be set via pyproject.toml or .env (or a combination).
-
-    Use the [tool.migrate] key.
-    Either - or _ can be used in the keys and they can be in any case.
-    """
-
-    migrate_uri: str = postpone()
-    schema_version: Optional[str]
-    redis_host: Optional[str]
-    migrate_cat_command: Optional[str]
-    database_to_restore: str = "/data/database_to_restore.sql"
-    migrate_table: str = "ewh_implemented_features"
-    flag_location: str = "/flags"
-    schema: str | bool = "public"
-    create_flag_location: bool = False
-    db_folder: Optional[str] = None
-    migrations_file: str = "migrations.py"
-
-    db_uri: str = alias("migrate_uri")
-
-    def __repr__(self):
-        """
-        Represent the class by dumping its data.
-        """
-        data = asdict(self, with_top_level_key=False)
-        return f"<Config{data}>"
-
-
-def _get_config():
-    """
-    First try config from env, then fallback to pyproject.
-    """
-    dotenv.load_dotenv(find_dotenv(usecwd=True))
-    try:
-        return Config.load("pyproject.toml", key="tool.migrate")
-    except (configuraptor.errors.ConfigError, FileNotFoundError):
-        return Config.from_env(load_dotenv=False)
-
-
-@typing.overload
-def get_config(key: str) -> typing.Any:
-    """
-    If you get_config with a key, that propertly will be returned from the config.
-    """
-
-
-@typing.overload
-def get_config(key: None = None) -> Config:
-    """
-    If you get_config without a key, the whole config object will be returned.
-    """
-
-
-def get_config(key: Optional[str] = None) -> Config | typing.Any:
-    """
-    Get the whole config or a specific key.
-    """
-    config = _get_config()
-    config.update_from_env()  # extend toml defaults with env secrets
-
-    if key:
-        return getattr(config, key)
-
-    return config
-
-
-def _console_hook(args: list[str]):  # pragma: no cover
+def _console_hook(args: list[str], config: Optional[Config] = None):  # pragma: no cover
     if "-h" in args or "--help" in args:
         print(
             """
@@ -648,10 +635,10 @@ def _console_hook(args: list[str]):  # pragma: no cover
         )
         exit(0)
 
-    config = get_config()
+    config = config or get_config()
 
     # get the versioned lock file path, as the config performs the environment variable expansion
-    with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file():
+    with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
         if args:
             print(f"Using argument {args[0]} as a reference to the migrations file.")
             # use the first argument as a reference to the migrations file
