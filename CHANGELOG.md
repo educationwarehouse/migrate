@@ -2,6 +2,10 @@
 
 <!--next-version-placeholder-->
 
+## v0.6.3 (2023-11-22)
+### Fix
+* Remove lock file on base exception since keyboardinterrupt also means the migration failed! ([`9fb8c3e`](https://github.com/educationwarehouse/migrate/commit/9fb8c3ec27812611913bd50c3558f4f08133616b))
+
 ## v0.6.2 (2023-11-21)
 ### Fix
 * Expose console_hook for external library usage ([`56ae0b6`](https://github.com/educationwarehouse/migrate/commit/56ae0b69f407847fa21e4754e2770d7c0ad3ca88))
