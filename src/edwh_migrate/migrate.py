@@ -609,7 +609,7 @@ def schema_versioned_lock_file(
                 print(f"Check the {config.migrate_table} table for details.")
                 lock_file.unlink()
 
-            except Exception:
+            except BaseException:
                 # since another exception was raised, reraise it for the stack trace.
                 lock_file.unlink()
                 raise
