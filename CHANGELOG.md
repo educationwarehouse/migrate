@@ -2,6 +2,9 @@
 
 <!--next-version-placeholder-->
 
+## v0.7.0 (2023-12-15)
+
+
 ## v0.7.0-beta.1 (2023-12-15)
 ### Feature
 * Support typedal via USE_TYPEDAL=1 or toml ([`744430d`](https://github.com/educationwarehouse/migrate/commit/744430d4f9b829115a12d90e290ef731c449bdff))
