@@ -2,6 +2,10 @@
 
 <!--next-version-placeholder-->
 
+## v0.7.0-beta.1 (2023-12-15)
+### Feature
+* Support typedal via USE_TYPEDAL=1 or toml ([`744430d`](https://github.com/educationwarehouse/migrate/commit/744430d4f9b829115a12d90e290ef731c449bdff))
+
 ## v0.6.3 (2023-11-22)
 ### Fix
 * Remove lock file on base exception since keyboardinterrupt also means the migration failed! ([`9fb8c3e`](https://github.com/educationwarehouse/migrate/commit/9fb8c3ec27812611913bd50c3558f4f08133616b))
