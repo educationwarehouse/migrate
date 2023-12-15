@@ -43,6 +43,11 @@ from dotenv import find_dotenv
 from pydal import DAL, Field
 from pydal.objects import Table
 
+try:
+    from typedal import TypeDAL
+except ImportError:
+    TypeDAL = DAL  # type: ignore
+
 registered_functions = OrderedDict()
 
 
@@ -119,6 +124,7 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
     create_flag_location: bool = False
     db_folder: Optional[str] = None
     migrations_file: str = "migrations.py"
+    use_typedal: bool = False
 
     db_uri: str = alias("migrate_uri")
 
@@ -242,17 +248,18 @@ def setup_db(
 
     :return: database connection
     """
-    if dal_class is None:
-        # default: pydal.DAL
-        # (alternative: py4web.core.DAL)
-        dal_class = DAL
-
     try:
         config = config or get_config()
 
         uri = config.migrate_uri
     except (KeyError, ConfigErrorMissingKey, IsPostponedError) as e:
         raise InvalidConfigException("$MIGRATE_URI not found in environment.") from e
+
+    if dal_class is None:
+        # default: pydal.DAL
+        # (alternatives: py4web.core.DAL, typedal.TypeDAL, typedal.py4web.DAL)
+        dal_class = TypeDAL if config.use_typedal else DAL
+
     is_postgres = uri.startswith("postgres")
     driver_args: dict[str, typing.Any] = {}
     if is_postgres:

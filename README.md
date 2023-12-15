@@ -33,6 +33,7 @@ These variables can be set in the current environment or via `.env`:
 * `FLAG_LOCATION`: when using schema versioned lock files, this directory is used to store the flags. Defaults to `/flags`.
 * `CREATE_FLAG_LOCATION` (bool): should the directory above be created if it does not exist yet? Defaults to 0 (false). 
 * `SCHEMA`: (for postgres) set the default namespace (`search_path`). Defaults to `public`.
+* `USE_TYPEDAL`: pass a TypeDAL instance to migrations instead of a regular pyDAL.
 
 ### Config: pyproject.toml
 
