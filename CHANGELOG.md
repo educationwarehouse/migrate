@@ -2,6 +2,10 @@
 
 <!--next-version-placeholder-->
 
+## v0.7.1 (2023-12-21)
+### Fix
+* If the ewh_implemented_features .table file already existed, setup_db could crash ([`04d2149`](https://github.com/educationwarehouse/migrate/commit/04d214917fe41bfc3637075a18394b7e7561064f))
+
 ## v0.7.0 (2023-12-15)
 
 
