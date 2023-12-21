@@ -1,12 +1,9 @@
 import os
 import pathlib
-import shutil
-import tempfile
 
 import plumbum
 import pydal
 import pytest
-from configuraptor import Singleton
 from contextlib_chdir import chdir
 from pydal import DAL
 
@@ -18,60 +15,21 @@ from src.edwh_migrate.migrate import (
     get_config,
     schema_versioned_lock_file,
 )
+from .fixtures import (  # noqa
+    clean_migrate,
+    fixture_temp_chdir,
+    sqlite_empty,
+    tmp_empty_sqlite_db_file,
+    tmp_just_implemented_features_sqlite_db_file,
+    tmp_just_implemented_features_sqlite_sql_file,
+    tmp_sqlite_folder,
+    tmp_sqlite_sql_file,
+)
 
 
 def test_version():
     assert isinstance(__version__, str)
     assert __version__
-
-
-@pytest.fixture(scope="session")
-def tmp_sqlite_folder(tmp_path_factory):
-    return tmp_path_factory.mktemp("sqlite3.tmp")
-
-
-@pytest.fixture(scope="session")
-def sqlite_empty():
-    return pathlib.Path(__file__).parent
-
-
-@pytest.fixture
-def tmp_sqlite_sql_file(tmp_sqlite_folder, sqlite_empty):
-    dst = tmp_sqlite_folder / "test.sql"
-    shutil.copy(sqlite_empty / "test.sql", dst)
-    yield dst
-    dst.unlink(missing_ok=True)
-
-
-@pytest.fixture
-def tmp_empty_sqlite_db_file(tmp_sqlite_folder, sqlite_empty):
-    dst = tmp_sqlite_folder / "empty_sqlite.db"
-    shutil.copy(sqlite_empty / "sqlite_empty" / "empty_sqlite.db", dst)
-    os.environ["MIGRATE_URI"] = f"sqlite://{str(dst)}"
-    yield dst
-    dst.unlink(missing_ok=True)
-    del os.environ["MIGRATE_URI"]
-
-
-@pytest.fixture
-def tmp_just_implemented_features_sqlite_sql_file(tmp_sqlite_folder, sqlite_empty):
-    return sqlite_empty / "sqlite_empty" / "just_implemented_features.sql"
-
-
-@pytest.fixture
-def tmp_just_implemented_features_sqlite_db_file(tmp_sqlite_folder, sqlite_empty):
-    dst = tmp_sqlite_folder / "just_implemented_features.db"
-    shutil.copy(sqlite_empty / "sqlite_empty" / "just_implemented_features.db", dst)
-    os.environ["MIGRATE_URI"] = f"sqlite://{str(dst)}"
-    yield dst
-    dst.unlink(missing_ok=True)
-    del os.environ["MIGRATE_URI"]
-
-
-@pytest.fixture
-def clean_migrate():
-    migrate.registered_functions = {}
-    Singleton.clear()  # clean cached Config
 
 
 def test_env_migrate_uri_is_missing():
@@ -292,14 +250,6 @@ def test_schema_versioned_lock_file(capsys, clean_migrate):
     assert "removing the lock file" not in captured.out
 
 
-@pytest.fixture()
-def fixture_temp_chdir():
-    with tempfile.TemporaryDirectory() as _dir:
-        cwd = pathlib.Path(_dir)
-        with chdir(cwd):
-            yield cwd
-
-
 def test_without_migrate_uri_but_with_db_uri_and_folder(fixture_temp_chdir, clean_migrate):
     os.environ["DB_URI"] = "sqlite://storage.sqlite"
 
@@ -308,14 +258,18 @@ def test_without_migrate_uri_but_with_db_uri_and_folder(fixture_temp_chdir, clea
 
     os.environ["DB_FOLDER"] = str(db_folder)
 
-    migrate.setup_db(migrate_enabled=True, migrate=True)
+    try:
+        migrate.setup_db(migrate_enabled=True, migrate=True)
 
-    assert db_folder.exists()
+        assert db_folder.exists()
 
-    assert plumbum.local["ls"](os.getcwd()).strip() == "database"
+        assert plumbum.local["ls"](os.getcwd()).strip() == "database"
 
-    db_ls = plumbum.local["ls"](db_folder)
+        db_ls = plumbum.local["ls"](db_folder)
 
-    assert "ewh_implemented_features.table" in db_ls
-    assert "sql.log" in db_ls
-    assert "storage.sqlite" in db_ls
+        assert "ewh_implemented_features.table" in db_ls
+        assert "sql.log" in db_ls
+        assert "storage.sqlite" in db_ls
+    finally:
+        del os.environ["DB_URI"]
+        del os.environ["DB_FOLDER"]

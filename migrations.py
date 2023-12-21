@@ -2,9 +2,7 @@
 # SPDX-FileCopyrightText: 2023-present Remco <remco@educationwarehouse.nl>
 #
 # SPDX-License-Identifier: MIT
-import typing
-
-from pydal import DAL
+# type: ignore
 
 from edwh_migrate import migration
 

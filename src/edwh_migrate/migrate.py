@@ -190,6 +190,8 @@ def setup_db(
     dal_class: None = None,
     impl_feat_table_name: Optional[str] = None,
     folder: Optional[str] = None,
+    config: Optional[Config] = None,
+    remove_migrate_tablefile: bool = False,
 ) -> DAL:
     """
     If `dal_class` is not filled in, a normal DAL instance is returned.
@@ -205,6 +207,8 @@ def setup_db(
     dal_class: typing.Type[T_Dal] = DAL,
     impl_feat_table_name: Optional[str] = None,
     folder: Optional[str] = None,
+    config: Optional[Config] = None,
+    remove_migrate_tablefile: bool = False,
 ) -> T_Dal:
     """
     If `dal_class` is passed, an instance of that class will be returned.
@@ -220,6 +224,7 @@ def setup_db(
     impl_feat_table_name: Optional[str] = None,
     folder: Optional[str] = None,
     config: Optional[Config] = None,
+    remove_migrate_tablefile: bool = False,
 ) -> T_Dal | DAL:
     """
     Connect to the database and return a DAL object.
@@ -245,6 +250,7 @@ def setup_db(
     :param impl_feat_table_name: optional custom table name for ewh_implemented_features
     :param folder: directory to store sql log, table files etc
     :param config: existing Config object. If not passed, get_config will be called.
+    :param remove_migrate_tablefile: remove the ewh_implemented_features.table file if it exists?
 
     :return: database connection
     """
@@ -275,6 +281,7 @@ def setup_db(
         pool_size=1,
         folder=folder or config.db_folder,
     )
+
     if is_postgres and long_running:
         # https://www.pgpool.net/docs/latest/en/html/sql-pgpool-set.html
         # make this connection able to live longer, because the functions can take over 30s
@@ -285,7 +292,12 @@ def setup_db(
             db.executesql(f"PGPOOL SET client_idle_limit = {long_running if str(long_running).isdigit() else 3600};")
             db.rollback()
 
+    if remove_migrate_tablefile:
+        tablefile_path = Path(db._folder) / f"{db._uri_hash}_ewh_implemented_features.table"
+        tablefile_path.unlink(missing_ok=True)
+
     define_ewh_implemented_features(db, impl_feat_table_name or config.migrate_table)
+    db.commit()
 
     try:
         db(db.ewh_implemented_features).count()
@@ -471,12 +483,10 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None, config
         cmd()
 
 
-def activate_migrations(config: Optional[Config] = None) -> bool:
+def try_setup_db() -> typing.Optional[DAL]:
     """
-    Start the migration process, don't wait for a lock.
+    Handle multiple scenario's such as an existing db, a db that can be loaded from a backup or a fully new db.
     """
-    config = config or get_config()
-
     started = time.time()
     while time.time() - started < 600:
         try:
@@ -485,7 +495,7 @@ def activate_migrations(config: Optional[Config] = None) -> bool:
 
             db.commit()
             # without an error, all *should* be well...
-            break
+            return db
         except DatabaseNotYetInitialized as e:
             # the connection succeeded, but when encountering an empty databse,
             # the features table will not be found, and this will raise an exception
@@ -502,11 +512,15 @@ def activate_migrations(config: Optional[Config] = None) -> bool:
                 # give db-0 a while to catch up
                 time.sleep(10)
                 # reconnect to the database, since the above operation takes longer than timeout period on dev machines.
-                db = setup_db()
+                return setup_db()
 
             except FileNotFoundError as e:
-                print(f"RECOVER: {e} not found. Starting from scratch.")
-                db = setup_db(migrate=True, migrate_enabled=True)
+                with contextlib.suppress(DatabaseNotYetInitialized):
+                    print(f"RECOVER: {e} not found. Starting from scratch.")
+                    return setup_db(migrate=True, migrate_enabled=True)
+                with contextlib.suppress(DatabaseNotYetInitialized):
+                    print("RECOVER: Failed. Starting from scratch with new .table file.")
+                    return setup_db(migrate=True, migrate_enabled=True, remove_migrate_tablefile=True)
 
             except Exception as e:
                 print("RECOVER: database recovery went wrong:", e)
@@ -518,6 +532,20 @@ def activate_migrations(config: Optional[Config] = None) -> bool:
             )
             print(e)
             time.sleep(3)
+
+    # shouldn't happen :(
+    return None
+
+
+def activate_migrations(config: Optional[Config] = None) -> bool:
+    """
+    Start the migration process, don't wait for a lock.
+    """
+    db = try_setup_db()
+    if not db:
+        raise ValueError("No db could be set up!")
+
+    config = config or get_config()
 
     successes = []
     # perform migrations
