@@ -634,20 +634,57 @@ def schema_versioned_lock_file(
             print("migrate: lock file already exists, migration should be completed. Aborting migration")
             raise MigrateLockExists(str(lock_file))
         else:
-            # create the lock asap, to avoid racing conditions with other possible migration processes
-            lock_file.touch()
             try:
                 yield lock_file
+                # executed after successful with block:
+                lock_file.touch()
             except MigrationFailed:
                 # remove the lock file, so that the migration can be retried.
                 print("ERROR: migration failed, removing the lock file.")
                 print(f"Check the {config.migrate_table} table for details.")
-                lock_file.unlink()
+                lock_file.unlink(missing_ok=True)
 
             except BaseException:
                 # since another exception was raised, reraise it for the stack trace.
-                lock_file.unlink()
+                lock_file.unlink(missing_ok=True)
                 raise
+
+
+def import_migrations(args: list[str], config: Config):
+    if args:
+        print(f"Using argument {args[0]} as a reference to the migrations file.")
+        # use the first argument as a reference to the migrations file
+        # or the folder where the migrations file is stored
+        arg = Path(args[0])
+        if arg.exists() and arg.is_file():
+            print(f"importing migrations from {arg}")
+            sys.path.insert(0, str(arg.parent))
+            # importing the migrations.py file will register the functions
+            importlib.import_module(arg.stem)
+        elif arg.exists() and arg.is_dir():
+            print(f"importing migrations from {arg}/migrations.py")
+            sys.path.insert(0, str(arg))
+            # importing the migrations.py file will register the functions
+            importlib.import_module("migrations")
+        else:
+            print(f"ERROR: no migrations found at {arg}", file=sys.stderr)
+            exit(1)
+
+    elif config.migrations_file and (arg := Path(config.migrations_file)) and arg.exists():
+        print(f"importing migrations from {arg}")
+        sys.path.insert(0, str(arg.parent))
+        # importing the migrations.py file will register the functions
+        importlib.import_module(arg.stem)
+
+    elif Path("migrations.py").exists():
+        print("migrations.py exists, importing @migration decorated functions.")
+        sys.path.insert(0, os.getcwd())
+        # importing the migrations.py file will register the functions
+        import migrations  # noqa F401: semantic import here
+
+    else:
+        print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
+        exit(1)
 
 
 def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # pragma: no cover
@@ -670,42 +707,11 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         )
         exit(0)
 
-    config = config or get_config()
+    config = config or get_config()  # type: Config
 
     # get the versioned lock file path, as the config performs the environment variable expansion
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
-        if args:
-            print(f"Using argument {args[0]} as a reference to the migrations file.")
-            # use the first argument as a reference to the migrations file
-            # or the folder where the migrations file is stored
-            arg = Path(args[0])
-            if arg.exists() and arg.is_file():
-                print(f"importing migrations from {arg}")
-                sys.path.insert(0, str(arg.parent))
-                # importing the migrations.py file will register the functions
-                importlib.import_module(arg.stem)
-            elif arg.exists() and arg.is_dir():
-                print(f"importing migrations from {arg}/migrations.py")
-                sys.path.insert(0, str(arg))
-                # importing the migrations.py file will register the functions
-                importlib.import_module("migrations")
-            else:
-                print(f"ERROR: no migrations found at {arg}", file=sys.stderr)
-                exit(1)
-        elif config.migrations_file and (arg := Path(config.migrations_file)) and arg.exists():
-            print(f"importing migrations from {arg}")
-            sys.path.insert(0, str(arg.parent))
-            # importing the migrations.py file will register the functions
-            importlib.import_module(arg.stem)
-
-        elif Path("migrations.py").exists():
-            print("migrations.py exists, importing @migration decorated functions.")
-            sys.path.insert(0, os.getcwd())
-            # importing the migrations.py file will register the functions
-            import migrations  # noqa F401: semantic import here
-        else:
-            print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
-            exit(1)
+        import_migrations(args, config)
         print("starting migrate hook")
         print(f"{len(registered_functions)} migrations discovered")
         if activate_migrations():
@@ -721,7 +727,6 @@ def console_hook() -> None:  # pragma: no cover
     lockfile: '/flags/migrate-{os.environ["SCHEMA_VERSION"]}.complete'
     """
     _console_hook(sys.argv[1:])
-
 
 # ------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------
