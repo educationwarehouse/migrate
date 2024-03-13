@@ -436,8 +436,14 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None, config
     print("RECOVER_DATABASE_FROM_BACKEND started ")
     prepared_sql_path = pathlib.Path(config.database_to_restore)
 
-    if not prepared_sql_path.exists():
+    name, extension = os.path.splitext(prepared_sql_path)
+    for ext in ['.sql', '.sql.gz', '.gz', 'sql.xz', '.xz','NOTFOUND']:
+        prepared_sql_path = name + ext
+        if prepared_sql_path.exists():
+            continue
+    if ext == 'NOTFOUND':
         raise FileNotFoundError(prepared_sql_path)
+
     extension = prepared_sql_path.suffix.lower()
 
     cat_command = {
