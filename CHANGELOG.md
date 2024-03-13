@@ -2,6 +2,10 @@
 
 <!--next-version-placeholder-->
 
+## v0.7.3 (2024-03-13)
+### Fix
+* Convert SQL path to pathlib object ([`dc3de47`](https://github.com/educationwarehouse/migrate/commit/dc3de4749a2aef0f9fca7fdb1e69bc94e1216364))
+
 ## v0.7.2 (2024-03-13)
 ### Fix
 * Support multiple file extensions in database recovery ([`a01db29`](https://github.com/educationwarehouse/migrate/commit/a01db2932fdfe14a356482dcd543672cedd15572))
