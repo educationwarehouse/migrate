@@ -2,6 +2,9 @@
 
 <!--next-version-placeholder-->
 
+## v0.7.5 (2024-03-13)
+
+
 ## v0.7.4 (2024-03-13)
 ### Fix
 * Update tablefile path in migration script ([`8e6c7fd`](https://github.com/educationwarehouse/migrate/commit/8e6c7fd5ec48847408a026b6e38f2e5cc23ac6b4))
