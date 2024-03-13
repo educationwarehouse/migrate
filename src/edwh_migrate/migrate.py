@@ -440,7 +440,7 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None, config
     for ext in ['.sql', '.sql.gz', '.gz', 'sql.xz', '.xz','NOTFOUND']:
         prepared_sql_path = pathlib.Path(name + ext)
         if prepared_sql_path.exists():
-            continue
+            break
     if ext == 'NOTFOUND':
         raise FileNotFoundError(prepared_sql_path)
 
