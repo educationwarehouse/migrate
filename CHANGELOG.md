@@ -2,6 +2,10 @@
 
 <!--next-version-placeholder-->
 
+## v0.7.4 (2024-03-13)
+### Fix
+* Update tablefile path in migration script ([`8e6c7fd`](https://github.com/educationwarehouse/migrate/commit/8e6c7fd5ec48847408a026b6e38f2e5cc23ac6b4))
+
 ## v0.7.3 (2024-03-13)
 ### Fix
 * Convert SQL path to pathlib object ([`dc3de47`](https://github.com/educationwarehouse/migrate/commit/dc3de4749a2aef0f9fca7fdb1e69bc94e1216364))
