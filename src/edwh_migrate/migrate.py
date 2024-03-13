@@ -293,7 +293,7 @@ def setup_db(
             db.rollback()
 
     if remove_migrate_tablefile:
-        tablefile_path = Path(db._folder) / f"{db._uri_hash}_ewh_implemented_features.table"
+        tablefile_path = Path(db._folder or '.') / f"{db._uri_hash}_ewh_implemented_features.table"
         tablefile_path.unlink(missing_ok=True)
 
     define_ewh_implemented_features(db, impl_feat_table_name or config.migrate_table)
