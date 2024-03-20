@@ -180,8 +180,8 @@ def test_recover_database_from_backup(tmp_just_implemented_features_sqlite_sql_f
         recover_database_from_backup()
 
     fake_path.touch()
-    with pytest.raises(NotImplementedError):
-        # invalid extension
+    with pytest.raises(FileNotFoundError):
+        # even if the file doesn't exist but has invalid extension, not found error is raised.
         recover_database_from_backup()
 
     config.database_to_restore = str(tmp_just_implemented_features_sqlite_sql_file)
