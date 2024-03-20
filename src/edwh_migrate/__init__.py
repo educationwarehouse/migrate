@@ -20,6 +20,8 @@ from .migrate import _console_hook as console_hook
 from .migrate import (
     activate_migrations,
     get_config,
+    list_migrations,
+    mark_migration,
     migration,
     recover_database_from_backup,
     registered_functions,
@@ -37,4 +39,6 @@ __all__ = [
     "Config",
     "get_config",
     "console_hook",
+    "list_migrations",
+    "mark_migration",
 ]

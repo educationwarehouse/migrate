@@ -48,7 +48,9 @@ try:
 except ImportError:
     TypeDAL = DAL  # type: ignore
 
-registered_functions = OrderedDict()
+Migration: typing.TypeAlias = typing.Callable[[DAL], bool]
+
+registered_functions: OrderedDict[str, Migration] = OrderedDict()
 
 
 class BaseEDWHMigrateException(BaseException):
@@ -293,7 +295,7 @@ def setup_db(
             db.rollback()
 
     if remove_migrate_tablefile:
-        tablefile_path = Path(db._folder or '.') / f"{db._uri_hash}_ewh_implemented_features.table"
+        tablefile_path = Path(db._folder or ".") / f"{db._uri_hash}_ewh_implemented_features.table"
         tablefile_path.unlink(missing_ok=True)
 
     define_ewh_implemented_features(db, impl_feat_table_name or config.migrate_table)
@@ -306,9 +308,6 @@ def setup_db(
         raise DatabaseNotYetInitialized(f"{config.migrate_table} is missing.", db) from e
 
     return db
-
-
-Migration: typing.TypeAlias = typing.Callable[[DAL], bool]
 
 
 @typing.overload
@@ -437,11 +436,12 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None, config
     prepared_sql_path = pathlib.Path(config.database_to_restore)
 
     name, extension = os.path.splitext(prepared_sql_path)
-    for ext in ['.sql', '.sql.gz', '.gz', 'sql.xz', '.xz','NOTFOUND']:
+    for ext in [".sql", ".sql.gz", ".gz", "sql.xz", ".xz", ".NOTFOUND"]:
         prepared_sql_path = pathlib.Path(name + ext)
         if prepared_sql_path.exists():
             break
-    if ext == 'NOTFOUND':
+
+    if ext == ".NOTFOUND":
         raise FileNotFoundError(prepared_sql_path)
 
     extension = prepared_sql_path.suffix.lower()
@@ -489,14 +489,14 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None, config
         cmd()
 
 
-def try_setup_db() -> typing.Optional[DAL]:
+def try_setup_db(config: Optional[Config] = None) -> typing.Optional[DAL]:
     """
     Handle multiple scenario's such as an existing db, a db that can be loaded from a backup or a fully new db.
     """
     started = time.time()
     while time.time() - started < 600:
         try:
-            db = setup_db()
+            db = setup_db(config=config)
             print("activate_migrations connected after", time.time() - started, "seconds.")
 
             db.commit()
@@ -543,15 +543,28 @@ def try_setup_db() -> typing.Optional[DAL]:
     return None
 
 
+def mark_migration(db: DAL, name: str, installed: bool) -> int | None:
+    """
+    Store the result of a migration in the implemented_features table.
+    """
+    new_id = db.ewh_implemented_features.update_or_insert(
+        db.ewh_implemented_features.name == name,
+        name=name,
+        installed=installed,
+        last_update_dttm=datetime.datetime.now(),
+    )  # type: int | None
+    return new_id
+
+
 def activate_migrations(config: Optional[Config] = None) -> bool:
     """
     Start the migration process, don't wait for a lock.
     """
-    db = try_setup_db()
+    config = config or get_config()
+
+    db = try_setup_db(config)
     if not db:
         raise ValueError("No db could be set up!")
-
-    config = config or get_config()
 
     successes = []
     # perform migrations
@@ -573,12 +586,7 @@ def activate_migrations(config: Optional[Config] = None) -> bool:
                 db_for_this_function.close()
                 print("ran: ", name, "successfully. ")
                 # alleen bij success opslaan dat er de feature beschikbaar is
-                db.ewh_implemented_features.update_or_insert(
-                    db.ewh_implemented_features.name == name,
-                    name=name,
-                    installed=True,
-                    last_update_dttm=datetime.datetime.now(),
-                )
+                mark_migration(db, name, installed=True)
             else:
                 print("ran: ", name, " and failed. ")
                 successes.append(False)
@@ -586,12 +594,7 @@ def activate_migrations(config: Optional[Config] = None) -> bool:
                 db_for_this_function.rollback()
                 # and close because this connection is not used any longer.
                 db_for_this_function.close()
-                db.ewh_implemented_features.update_or_insert(
-                    db.ewh_implemented_features.name == name,
-                    name=name,
-                    installed=False,
-                    last_update_dttm=datetime.datetime.now(),
-                )
+                mark_migration(db, name, installed=False)
             db.commit()
         else:
             print("already installed. ")
@@ -656,7 +659,12 @@ def schema_versioned_lock_file(
                 raise
 
 
-def import_migrations(args: list[str], config: Config):
+def import_migrations(args: list[str], config: Config) -> bool:
+    """
+    Import defined migrations in a number of ways, without executing them yet.
+
+    Migrations get stored in `registered_functions`.
+    """
     if args:
         print(f"Using argument {args[0]} as a reference to the migrations file.")
         # use the first argument as a reference to the migrations file
@@ -667,20 +675,23 @@ def import_migrations(args: list[str], config: Config):
             sys.path.insert(0, str(arg.parent))
             # importing the migrations.py file will register the functions
             importlib.import_module(arg.stem)
+            return True
         elif arg.exists() and arg.is_dir():
             print(f"importing migrations from {arg}/migrations.py")
             sys.path.insert(0, str(arg))
             # importing the migrations.py file will register the functions
             importlib.import_module("migrations")
+            return True
         else:
             print(f"ERROR: no migrations found at {arg}", file=sys.stderr)
-            exit(1)
+            return False
 
     elif config.migrations_file and (arg := Path(config.migrations_file)) and arg.exists():
         print(f"importing migrations from {arg}")
         sys.path.insert(0, str(arg.parent))
         # importing the migrations.py file will register the functions
         importlib.import_module(arg.stem)
+        return True
 
     elif Path("migrations.py").exists():
         print("migrations.py exists, importing @migration decorated functions.")
@@ -688,9 +699,20 @@ def import_migrations(args: list[str], config: Config):
         # importing the migrations.py file will register the functions
         import migrations  # noqa F401: semantic import here
 
+        return True
     else:
         print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
-        exit(1)
+        return False
+
+
+def list_migrations(config: Config, args: Optional[list[str]] = None) -> OrderedDict[str, Migration]:
+    """
+    Helper function for external usage to list all @registered migrations.
+    """
+    if not registered_functions:
+        import_migrations(args or [], config)
+
+    return registered_functions
 
 
 def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # pragma: no cover
@@ -713,17 +735,21 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         )
         exit(0)
 
-    config = config or get_config()  # type: Config
+    config = config or get_config()
 
     # get the versioned lock file path, as the config performs the environment variable expansion
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
-        import_migrations(args, config)
+        if not import_migrations(args, config):
+            # nothing to do, exit with error:
+            exit(1)
+
         print("starting migrate hook")
         print(f"{len(registered_functions)} migrations discovered")
-        if activate_migrations():
-            print("migration completed successfully, marking success.")
-        else:
+
+        if not activate_migrations(config):
             raise MigrationFailed("Not every migration succeeded.")
+
+        print("migration completed successfully, marking success.")
 
 
 def console_hook() -> None:  # pragma: no cover
@@ -733,6 +759,7 @@ def console_hook() -> None:  # pragma: no cover
     lockfile: '/flags/migrate-{os.environ["SCHEMA_VERSION"]}.complete'
     """
     _console_hook(sys.argv[1:])
+
 
 # ------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------
