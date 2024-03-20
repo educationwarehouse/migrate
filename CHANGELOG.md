@@ -2,6 +2,16 @@
 
 <!--next-version-placeholder-->
 
+## v0.8.0-beta.1 (2024-03-20)
+
+### Feature
+
+* **edwh_migrate:** Add list_migrations and mark_migration functions + fixes ([`a0be3da`](https://github.com/educationwarehouse/migrate/commit/a0be3daf3ef65f438f89a79a8182fcdb0268dce7))
+
+### Fix
+
+* Lock file was (illegally) created and not properly removed on some errors ([`0684c1e`](https://github.com/educationwarehouse/migrate/commit/0684c1eb5394dac2e712cfb485714ff29260a6a9))
+
 ## v0.7.5 (2024-03-13)
 
 
