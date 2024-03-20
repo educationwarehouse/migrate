@@ -293,7 +293,7 @@ def setup_db(
             db.rollback()
 
     if remove_migrate_tablefile:
-        tablefile_path = Path(db._folder) / f"{db._uri_hash}_ewh_implemented_features.table"
+        tablefile_path = Path(db._folder or '.') / f"{db._uri_hash}_ewh_implemented_features.table"
         tablefile_path.unlink(missing_ok=True)
 
     define_ewh_implemented_features(db, impl_feat_table_name or config.migrate_table)
@@ -436,8 +436,14 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None, config
     print("RECOVER_DATABASE_FROM_BACKEND started ")
     prepared_sql_path = pathlib.Path(config.database_to_restore)
 
-    if not prepared_sql_path.exists():
+    name, extension = os.path.splitext(prepared_sql_path)
+    for ext in ['.sql', '.sql.gz', '.gz', 'sql.xz', '.xz','NOTFOUND']:
+        prepared_sql_path = pathlib.Path(name + ext)
+        if prepared_sql_path.exists():
+            break
+    if ext == 'NOTFOUND':
         raise FileNotFoundError(prepared_sql_path)
+
     extension = prepared_sql_path.suffix.lower()
 
     cat_command = {
