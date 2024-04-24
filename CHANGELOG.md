@@ -2,6 +2,11 @@
 
 <!--next-version-placeholder-->
 
+## v0.8.1 (2024-04-24)
+### Fix
+* Redis.from_url for better parsing + test valkey as drop-in redis replacement ([`6b842e8`](https://github.com/educationwarehouse/migrate/commit/6b842e81e43ec2874fefe29b7ee7d94115483ba1))
+* Support custom redis port + add test for it ([`228c72a`](https://github.com/educationwarehouse/migrate/commit/228c72afe689ed2b0845e33ee2d422f5851bb35d))
+
 ## v0.8.0 (2024-03-21)
 
 
