@@ -1,4 +1,3 @@
-import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -7,7 +6,6 @@ import psycopg2
 import pytest
 from configuraptor import Singleton
 from pydal import DAL
-from pydal._globals import THREAD_LOCAL
 from testcontainers.postgres import PostgresContainer
 
 from src.edwh_migrate import (
