@@ -609,7 +609,10 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
     # clean redis whenever possible
     # reads REDIS_MASTER_HOST from the environment
     if redis_host := config.redis_host:
-        r = redis.Redis(*redis_host.split(":"))  # todo: support password/other settings?
+        if not redis_host.startswith("redis://"):
+            redis_host = f"redis://{redis_host}"
+
+        r = redis.Redis.from_url(redis_host)
         keys = r.keys()
         print(f"Removing {len(keys)} keys from redis.")
         for key in keys:
@@ -764,6 +767,7 @@ def console_hook() -> None:  # pragma: no cover
     lockfile: '/flags/migrate-{os.environ["SCHEMA_VERSION"]}.complete'
     """
     _console_hook(sys.argv[1:])
+
 
 # ------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------

@@ -10,7 +10,12 @@ from pydal import DAL
 from pydal._globals import THREAD_LOCAL
 from testcontainers.postgres import PostgresContainer
 
-from src.edwh_migrate import Config, migrate, recover_database_from_backup, activate_migrations
+from src.edwh_migrate import (
+    Config,
+    activate_migrations,
+    migrate,
+    recover_database_from_backup,
+)
 
 
 def rmdir(path: Path):
