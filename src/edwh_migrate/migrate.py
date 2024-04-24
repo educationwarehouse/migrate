@@ -52,6 +52,8 @@ Migration: typing.TypeAlias = typing.Callable[[DAL], bool]
 
 registered_functions: OrderedDict[str, Migration] = OrderedDict()
 
+TEN_MINUTES = 600
+
 
 class BaseEDWHMigrateException(BaseException):
     """
@@ -492,12 +494,12 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None, config
         cmd()
 
 
-def try_setup_db(config: Optional[Config] = None) -> typing.Optional[DAL]:
+def try_setup_db(config: Optional[Config] = None, max_time: int = TEN_MINUTES) -> typing.Optional[DAL]:
     """
     Handle multiple scenario's such as an existing db, a db that can be loaded from a backup or a fully new db.
     """
     started = time.time()
-    while time.time() - started < 600:
+    while time.time() - started < max_time:
         try:
             db = setup_db(config=config)
             print("activate_migrations connected after", time.time() - started, "seconds.")
@@ -505,7 +507,7 @@ def try_setup_db(config: Optional[Config] = None) -> typing.Optional[DAL]:
             db.commit()
             # without an error, all *should* be well...
             return db
-        except DatabaseNotYetInitialized as e:
+        except DatabaseNotYetInitialized as e:  # pragma: no cover
             # the connection succeeded, but when encountering an empty databse,
             # the features table will not be found, and this will raise an exception
             # this error is to be expected, since the database is not yet recovered...
@@ -534,7 +536,7 @@ def try_setup_db(config: Optional[Config] = None) -> typing.Optional[DAL]:
             except Exception as e:
                 print("RECOVER: database recovery went wrong:", e)
             break  # don't retry
-        except Exception as e:
+        except Exception as e:  # pragma: no cover
             print(
                 "activate_migrations failed to connect to database. "
                 "sleeping and retrying in 3 seconds. will try for 10 min."
@@ -543,7 +545,7 @@ def try_setup_db(config: Optional[Config] = None) -> typing.Optional[DAL]:
             time.sleep(3)
 
     # shouldn't happen :(
-    return None
+    return None  # pragma: no cover
 
 
 def mark_migration(db: DAL, name: str, installed: bool) -> int | None:
@@ -559,13 +561,13 @@ def mark_migration(db: DAL, name: str, installed: bool) -> int | None:
     return new_id
 
 
-def activate_migrations(config: Optional[Config] = None) -> bool:
+def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MINUTES) -> bool:
     """
     Start the migration process, don't wait for a lock.
     """
     config = config or get_config()
 
-    db = try_setup_db(config)
+    db = try_setup_db(config, max_time=max_time)
     if not db:
         raise ValueError("No db could be set up!")
 
@@ -607,7 +609,7 @@ def activate_migrations(config: Optional[Config] = None) -> bool:
     # clean redis whenever possible
     # reads REDIS_MASTER_HOST from the environment
     if redis_host := config.redis_host:
-        r = redis.Redis(redis_host)
+        r = redis.Redis(*redis_host.split(":"))  # todo: support password/other settings?
         keys = r.keys()
         print(f"Removing {len(keys)} keys from redis.")
         for key in keys:

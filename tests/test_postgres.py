@@ -3,13 +3,14 @@ import shutil
 import tempfile
 from pathlib import Path
 
+import psycopg2
 import pytest
 from configuraptor import Singleton
 from pydal import DAL
 from pydal._globals import THREAD_LOCAL
 from testcontainers.postgres import PostgresContainer
 
-from src.edwh_migrate import Config, migrate
+from src.edwh_migrate import Config, migrate, recover_database_from_backup, activate_migrations
 
 
 def rmdir(path: Path):
@@ -24,7 +25,7 @@ postgres = PostgresContainer("postgres:16-alpine", dbname=DB_NAME)
 @pytest.fixture(scope="module", autouse=True)
 def psql(request):
     # defer teardown:
-    request.addfinalizer(lambda: postgres.stop())
+    request.addfinalizer(postgres.stop)
 
     postgres.start()
     # note: ONE PostgresContainer with scope module can be used,
@@ -77,3 +78,34 @@ def test_setup_on_psql_long_running(conn_str: str, tempdir: str):
     )
 
     assert db.ewh_implemented_features
+
+
+def psql_backup():
+    path = Path(__file__).parent / "sqlite_empty" / "just_implemented_features.psql.sql"
+    return str(path)
+
+
+def test_postgres_backup(conn_str: str, tempdir: str):
+    db = DAL(conn_str)
+
+    with pytest.raises(psycopg2.errors.UndefinedTable):
+        db.executesql("SELECT count(*) FROM ewh_implemented_features")
+    db.rollback()
+
+    config = Config.load(dict(migrate_uri=conn_str, db_folder=tempdir, database_to_restore=psql_backup()))
+    recover_database_from_backup(set_schema="public")
+
+    rows = db.executesql("SELECT count(*) FROM ewh_implemented_features")
+    assert rows[0][0] == 0  # no rows, but table exists
+
+
+def test_postgres_unavailable(conn_str: str, tempdir: str):
+    config = Config.load(
+        dict(
+            migrate_uri=conn_str.replace(DB_NAME, "INVALID_DB_NAME"),
+            db_folder=tempdir,
+            database_to_restore=psql_backup(),
+        )
+    )
+    with pytest.raises(ValueError):
+        activate_migrations(config=config, max_time=5)

@@ -6,20 +6,24 @@ import pytest
 from configuraptor import Singleton
 
 from src.edwh_migrate import migrate
-from src.edwh_migrate.migrate import import_migrations, Config, list_migrations
+from src.edwh_migrate.migrate import Config, import_migrations, list_migrations
 
 
 @pytest.fixture
 def migrations_at_temp():
     with tempfile.TemporaryDirectory() as d:
         with open(f"{d}/migrations.py", "w") as f:
-            f.write(textwrap.dedent("""
+            f.write(
+                textwrap.dedent(
+                    """
             from src.edwh_migrate import migration
             
             @migration()
             def test(db): return True
 
-            """))
+            """
+                )
+            )
         yield d
 
 
