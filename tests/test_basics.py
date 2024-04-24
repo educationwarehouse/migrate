@@ -15,6 +15,7 @@ from src.edwh_migrate.migrate import (
     get_config,
     schema_versioned_lock_file,
 )
+
 from .fixtures import (  # noqa
     clean_migrate,
     fixture_temp_chdir,
@@ -185,10 +186,22 @@ def test_recover_database_from_backup(tmp_just_implemented_features_sqlite_sql_f
         recover_database_from_backup()
 
     config.database_to_restore = str(tmp_just_implemented_features_sqlite_sql_file)
-    recover_database_from_backup()
+    recover_database_from_backup(config=config)  # sqlite:///tmp/.../empty_sqlite.db
 
     # no error anymore:
     assert migrate.setup_db(migrate=False)
+
+
+def test_recover_database_from_backup_relative(tmp_just_implemented_features_sqlite_sql_file, tmp_empty_sqlite_db_file):
+    config = get_config()
+
+    filepath = pathlib.Path(config.migrate_uri.split("://")[-1])
+    with chdir(filepath.parent):
+        config.migrate_uri = f"sqlite://{filepath.name}"  # sqlite://empty_sqlite.db
+        config.database_to_restore = str(tmp_just_implemented_features_sqlite_sql_file)
+        recover_database_from_backup(config=config)
+
+        assert migrate.setup_db(migrate=False)
 
 
 def test_config():

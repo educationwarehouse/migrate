@@ -3,7 +3,7 @@ import os
 import pytest
 from typedal import TypeDAL
 
-from src.edwh_migrate import setup_db, activate_migrations
+from src.edwh_migrate import activate_migrations, setup_db
 
 from .fixtures import (  # noqa
     clean_migrate,
@@ -19,18 +19,18 @@ from .fixtures import (  # noqa
 
 @pytest.fixture
 def env_use_typedal():
-    os.environ['USE_TYPEDAL'] = "1"
+    os.environ["USE_TYPEDAL"] = "1"
     yield
-    del os.environ['USE_TYPEDAL']
+    del os.environ["USE_TYPEDAL"]
 
 
 @pytest.fixture
 def tmp_typedal_env(fixture_temp_chdir):
-    os.environ['DB_URI'] = f"sqlite://{fixture_temp_chdir / 'some.sqlite'}"
-    os.environ['FOLDER'] = str(fixture_temp_chdir / "database")
+    os.environ["DB_URI"] = f"sqlite://{fixture_temp_chdir / 'some.sqlite'}"
+    os.environ["FOLDER"] = str(fixture_temp_chdir / "database")
     yield
-    del os.environ['DB_URI']
-    del os.environ['FOLDER']
+    del os.environ["DB_URI"]
+    del os.environ["FOLDER"]
 
 
 def test_setup_db(tmp_just_implemented_features_sqlite_db_file, clean_migrate):

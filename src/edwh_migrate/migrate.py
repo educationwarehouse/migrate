@@ -45,7 +45,7 @@ from pydal.objects import Table
 
 try:
     from typedal import TypeDAL
-except ImportError:
+except ImportError:  # pragma: no cover
     TypeDAL = DAL  # type: ignore
 
 Migration: typing.TypeAlias = typing.Callable[[DAL], bool]
@@ -289,9 +289,11 @@ def setup_db(
         # make this connection able to live longer, because the functions can take over 30s
         # to perform the job.
         # db.executesql("PGPOOL SET client_idle_limit = 3600;")
-        with contextlib.suppress(Exception):
-            print("Setting up for long running connection")
+        print("Setting up for long running connection")
+        try:
             db.executesql(f"PGPOOL SET client_idle_limit = {long_running if str(long_running).isdigit() else 3600};")
+        except psycopg2.errors.Error:
+            # maybe not using PGPOOL, ignore
             db.rollback()
 
     if remove_migrate_tablefile:
@@ -451,7 +453,7 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None, config
         ".xz": "xzcat",
         ".gz": "zcat",
     }.get(extension, config.migrate_cat_command)
-    if not cat_command:
+    if not cat_command:  # pragma: no cover
         raise NotImplementedError(f"Extension {extension} not supported for {prepared_sql_path}")
     unpack = plumbum.local[cat_command][prepared_sql_path]
 
@@ -471,6 +473,7 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None, config
         if "///" not in config.migrate_uri:
             # else absolute path, don't strip!
             filepath = filepath.strip("/")
+
         sqlite_database_path = pathlib.Path(uri.netloc) / pathlib.Path(filepath)
         sql_consumer = plumbum.local["sqlite3"][sqlite_database_path]
     # combine both
@@ -759,7 +762,6 @@ def console_hook() -> None:  # pragma: no cover
     lockfile: '/flags/migrate-{os.environ["SCHEMA_VERSION"]}.complete'
     """
     _console_hook(sys.argv[1:])
-
 
 # ------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------
