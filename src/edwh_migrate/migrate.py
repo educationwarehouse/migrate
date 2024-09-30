@@ -781,11 +781,6 @@ def console_hook() -> None:  # pragma: no cover
     """
     _console_hook(sys.argv[1:])
 
-@migration
-def deze_gaat_fout_misschien(db: DAL):
-    db.executesql("DIT IS GEEN VALIDE SQL;")
-    db.commit()
-    return True
 
 # ------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------
