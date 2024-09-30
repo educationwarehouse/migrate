@@ -18,11 +18,13 @@ When writing new tasks, make sure:
 import contextlib
 import datetime
 import importlib
+import inspect
 import os
 import pathlib
 import sqlite3
 import sys
 import time
+import traceback
 import typing
 import urllib
 import urllib.parse
@@ -582,8 +584,13 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
             # and we want all the functions to be siloed and not
             # have database schema dependencies and collisions.
             db_for_this_function = setup_db()
-            result = function(db_for_this_function)
-            successes.append(result)
+            try:
+                result = function(db_for_this_function)
+                successes.append(result)
+            except:
+                print(traceback.format_exc())
+                print(f"failed: {name} in {inspect.getfile(function)}, regel {inspect.getsourcelines(function)[1]}")
+                return False
             if result:
                 # commit the change to db
                 db_for_this_function.commit()
