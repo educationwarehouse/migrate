@@ -4,7 +4,15 @@
 # SPDX-License-Identifier: MIT
 # type: ignore
 
-from edwh_migrate import migration
+from edwh_migrate import migration, ViewMigrationManager
+
+
+class ExampleViewManager(ViewMigrationManager):
+    def down(self):
+        print('this happens before the migration', self.db._uri)
+
+    def up(self):
+        print('this happens after the migration', self.db._uri)
 
 
 @migration
@@ -37,8 +45,10 @@ def feature_3(db):
 
 @migration
 def functionalname_date_sequencenr(db):
-    db.executesql("""
-    
-    """)
+    with ExampleViewManager(db):
+        db.executesql("""
+        
+        """)
+
     db.commit()
     return True
