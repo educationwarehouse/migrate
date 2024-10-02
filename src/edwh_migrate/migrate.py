@@ -311,7 +311,6 @@ def setup_db(
     except (psycopg2.errors.UndefinedTable, sqlite3.OperationalError) as e:
         db.rollback()
         raise DatabaseNotYetInitialized(f"{config.migrate_table} is missing.", db) from e
-
     return db
 
 
@@ -757,6 +756,7 @@ def import_migrations(args: list[str], config: Config) -> bool:
         sys.path.insert(0, str(arg.parent))
         # importing the migrations.py file will register the functions
         importlib.import_module(arg.stem)
+        print(f"Calling down from Scatland: {config.migrations_file}")
         return True
 
     elif Path("migrations.py").exists():
@@ -780,7 +780,6 @@ def list_migrations(config: Config, args: Optional[list[str]] = None) -> Ordered
 
     return registered_functions
 
-
 def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # pragma: no cover
     if "-h" in args or "--help" in args:
         print(
@@ -789,7 +788,8 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
 
         The database connection url is read from the MIGRATE_URI environment variable.
         It should be a pydal compatible connection string.
-
+        
+        use -l or --list to get a list of migrations.
 
         ## Testing migrations using sqlite
 
@@ -800,14 +800,35 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         """
         )
         exit(0)
-
+    if "-l" in args or "--list" in args:
+        if not import_migrations([''], config):
+            # nothing to do, exit with error:
+            exit(1)
+        db = setup_db()
+        # take the content from the database to put it inside a dict.
+        rows = db(db.ewh_implemented_features).select().as_dict('name')
+        print(f"{len(registered_functions)} migrations discovered:")
+        for migration_name in registered_functions:
+            string = "not installed"
+            # Print out the content for every row where the name has been found in registered_functions.
+            if migration_name in rows:
+                if rows[migration_name]['installed']:
+                    string = "installed"
+                print(
+                    f"    name: {migration_name},   {string},  last updated: {rows[migration_name]['last_update_dttm']}")
+            else:
+                print(f"    name: {migration_name},   {string}")
+        exit(0)
     config = config or get_config()
+
 
     # get the versioned lock file path, as the config performs the environment variable expansion
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
+
         if not import_migrations(args, config):
             # nothing to do, exit with error:
             exit(1)
+
 
         print("starting migrate hook")
         print(f"{len(registered_functions)} migrations discovered")
