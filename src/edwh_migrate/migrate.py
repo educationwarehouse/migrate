@@ -47,7 +47,7 @@ from pydal.objects import Table
 try:
     from typedal import TypeDAL
 except ImportError:  # pragma: no cover
-    TypeDAL = DAL  # type: ignore
+    TypeDAL = DAL
 
 Migration: typing.TypeAlias = typing.Callable[[DAL], bool]
 
@@ -316,7 +316,11 @@ def setup_db(
 
 
 class ViewMigrationManager(abc.ABC):
-    def __init__(self, db: DAL):
+    """
+    Inherit me with an 'up' and 'down' for (materialized) views!
+    """
+
+    def __init__(self, db: DAL) -> None:
         """
         Initialize the ViewMigrationManager with a database connection.
 
@@ -326,22 +330,25 @@ class ViewMigrationManager(abc.ABC):
         self.db = db
 
     @abc.abstractmethod
-    def up(self):
+    def up(self) -> None:
         """
         Defines the logic to apply the migration, such as creating or modifying views.
+
         This method should be implemented in subclasses for the specific migration task.
         """
 
     @abc.abstractmethod
-    def down(self):
+    def down(self) -> None:
         """
         Defines the logic to reverse the migration, such as dropping or reverting views.
+
         This method should be implemented in subclasses for the specific migration task.
         """
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         """
         Context management method for entering the runtime context related to the migration.
+
         By default, this calls the `down` method to reverse or remove the migration before executing
         the block of code.
 
@@ -350,9 +357,10 @@ class ViewMigrationManager(abc.ABC):
         """
         self.down()
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
         """
         Context management method for exiting the runtime context related to the migration.
+
         This method calls the `up` method to apply the migration after the block of code finishes,
         regardless of whether an exception was raised.
 
