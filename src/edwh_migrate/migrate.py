@@ -42,6 +42,7 @@ from configuraptor.errors import ConfigErrorMissingKey, IsPostponedError
 from dotenv import find_dotenv
 from pydal import DAL, Field
 from pydal.objects import Table
+from tabulate import tabulate
 
 try:
     from typedal import TypeDAL
