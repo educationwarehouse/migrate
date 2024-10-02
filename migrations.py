@@ -42,3 +42,12 @@ def functionalname_date_sequencenr(db):
     """)
     db.commit()
     return True
+
+
+@migration
+def new_super_migration_bros_2(db):
+    db.executesql("""
+
+    """)
+    db.commit()
+    return True

@@ -749,17 +749,20 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         db = setup_db()
         # take the content from the database to put it inside a dict.
         rows = db(db.ewh_implemented_features).select().as_dict('name')
+        table = []
         print(f"{len(registered_functions)} migrations discovered:")
+
         for migration_name in registered_functions:
-            string = "not installed"
+            string = "failed"
             # Print out the content for every row where the name has been found in registered_functions.
             if migration_name in rows:
                 if rows[migration_name]['installed']:
-                    string = "installed"
-                print(
-                    f"    name: {migration_name},   {string},  last updated: {rows[migration_name]['last_update_dttm']}")
+                    string = "succeeded"
+                # print(f"    name: {migration_name},   {string},  last updated: {rows[migration_name]['last_update_dttm']}")
+                table.append([migration_name, string, rows[migration_name]['last_update_dttm']])
             else:
-                print(f"    name: {migration_name},   {string}")
+                table.append([migration_name, 'missing', 'N/A'])
+        print(tabulate(table, headers=["Migration Name", "Installation", "Last Updated"]))
         exit(0)
     config = config or get_config()
 
