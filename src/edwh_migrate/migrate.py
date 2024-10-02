@@ -587,9 +587,9 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
             try:
                 result = function(db_for_this_function)
                 successes.append(result)
-            except:
+            except Exception:
+                print(f"failed: {name} in {inspect.getfile(function)}:{inspect.getsourcelines(function)[1]}")
                 print(traceback.format_exc())
-                print(f"failed: {name} in {inspect.getfile(function)}, regel {inspect.getsourcelines(function)[1]}")
                 return False
             if result:
                 # commit the change to db
