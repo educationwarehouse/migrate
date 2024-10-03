@@ -19,11 +19,13 @@ import abc
 import contextlib
 import datetime
 import importlib
+import inspect
 import os
 import pathlib
 import sqlite3
 import sys
 import time
+import traceback
 import typing
 import urllib
 import urllib.parse
@@ -43,8 +45,6 @@ from configuraptor.errors import ConfigErrorMissingKey, IsPostponedError
 from dotenv import find_dotenv
 from pydal import DAL, Field
 from pydal.objects import Table
-import inspect
-import traceback
 
 try:
     from typedal import TypeDAL
@@ -328,6 +328,7 @@ class ViewMigrationManager(abc.ABC):
             db (DAL): The database connection object.
         """
         self.db = db
+
         used_by = getattr(self, "used_by", [])
 
         assert self.__class__ not in used_by, "Recursion prevented..."
@@ -711,7 +712,7 @@ def schema_versioned_lock_file(
 
     flag_location = Path(flag_location or config.flag_location)
     print(flag_location)
-    print('635')
+    print("635")
     if not flag_location.exists():
         if create_flag_location or config.create_flag_location:
             flag_location.mkdir()
@@ -806,7 +807,7 @@ def list_migrations(config: Config, args: Optional[list[str]] = None) -> Ordered
 
 
 def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # pragma: no cover
-    print('729')
+    print("729")
     if "-h" in args or "--help" in args:
         print(
             """
@@ -849,7 +850,7 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
     config = config or get_config()
 
     # get the versioned lock file path, as the config performs the environment variable expansion
-    print('752')
+    print("752")
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
 
         if not import_migrations(args, config):
@@ -864,7 +865,7 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
             raise MigrationFailed("Not every migration succeeded.")
 
         print("migration completed successfully, marking success.")
-    print('766')
+    print("766")
 
 
 def console_hook() -> None:  # pragma: no cover

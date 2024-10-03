@@ -7,12 +7,27 @@
 from edwh_migrate import migration, ViewMigrationManager
 
 
-class ExampleViewManager(ViewMigrationManager):
+class ExampleDependency(ViewMigrationManager):
+    # will also run used_by (= ExampleViewManager)
+
     def down(self):
-        print('this happens before the migration', self.db._uri)
+        print('2. this happens before before the migration', self.db._uri)
 
     def up(self):
-        print('this happens after the migration', self.db._uri)
+        print('3. this happens after after the migration', self.db._uri)
+
+
+class ExampleViewManager(ViewMigrationManager):
+    uses = [
+        ExampleDependency,
+    ]
+    # only runs itself, not the dependency
+
+    def down(self):
+        print('1. this happens before the migration', self.db._uri)
+
+    def up(self):
+        print('4. this happens after the migration', self.db._uri)
 
 
 @migration
@@ -45,10 +60,10 @@ def feature_3(db):
 
 @migration
 def functionalname_date_sequencenr(db):
-    with ExampleViewManager(db):
+    with ExampleDependency(db):
         db.executesql("""
         
         """)
 
     db.commit()
-    return True
+    return False
