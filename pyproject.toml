@@ -199,5 +199,6 @@ json-indent = 4
 
 [tool.migrate]
 # example:
+create-flag-location = true
 migrate-uri = "sqlite:///tmp/migrate_example.sqlite"
 flag-location = "/tmp/migrate_flags"

@@ -43,6 +43,8 @@ from configuraptor.errors import ConfigErrorMissingKey, IsPostponedError
 from dotenv import find_dotenv
 from pydal import DAL, Field
 from pydal.objects import Table
+import inspect
+import traceback
 
 try:
     from typedal import TypeDAL
@@ -654,8 +656,13 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
             # and we want all the functions to be siloed and not
             # have database schema dependencies and collisions.
             db_for_this_function = setup_db()
-            result = function(db_for_this_function)
-            successes.append(result)
+            try:
+                result = function(db_for_this_function)
+                successes.append(result)
+            except Exception:
+                print(f"failed: {name} in {inspect.getfile(function)}:{inspect.getsourcelines(function)[1]}")
+                print(traceback.format_exc())
+                return False
             if result:
                 # commit the change to db
                 db_for_this_function.commit()
@@ -703,6 +710,8 @@ def schema_versioned_lock_file(
     config = config or get_config()
 
     flag_location = Path(flag_location or config.flag_location)
+    print(flag_location)
+    print('635')
     if not flag_location.exists():
         if create_flag_location or config.create_flag_location:
             flag_location.mkdir()
@@ -797,6 +806,7 @@ def list_migrations(config: Config, args: Optional[list[str]] = None) -> Ordered
 
 
 def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # pragma: no cover
+    print('729')
     if "-h" in args or "--help" in args:
         print(
             """
@@ -839,11 +849,13 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
     config = config or get_config()
 
     # get the versioned lock file path, as the config performs the environment variable expansion
+    print('752')
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
 
         if not import_migrations(args, config):
             # nothing to do, exit with error:
             exit(1)
+        print(import_migrations(args, config))
 
         print("starting migrate hook")
         print(f"{len(registered_functions)} migrations discovered")
@@ -852,6 +864,7 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
             raise MigrationFailed("Not every migration succeeded.")
 
         print("migration completed successfully, marking success.")
+    print('766')
 
 
 def console_hook() -> None:  # pragma: no cover
