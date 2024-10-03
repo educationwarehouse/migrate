@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.9.1 (2024-10-03)
+
+### Fix
+
+* Debug prints ([`36d62ef`](https://github.com/educationwarehouse/migrate/commit/36d62efd2a0f328efad626765c23299697f6cf8d))
+
 ## v0.9.0 (2024-10-03)
 
 ### Feature
