@@ -315,11 +315,10 @@ def setup_db(
 
 
 class ViewMigrationManager(abc.ABC):
-    """
-    Inherit me with an 'up' and 'down' for (materialized) views!
-    """
+    # used_by: list[typing.Type["ViewMigrationManager"]] = []
+    uses: list[typing.Type["ViewMigrationManager"]] = []
 
-    def __init__(self, db: DAL) -> None:
+    def __init__(self, db: DAL):
         """
         Initialize the ViewMigrationManager with a database connection.
 
@@ -327,39 +326,52 @@ class ViewMigrationManager(abc.ABC):
             db (DAL): The database connection object.
         """
         self.db = db
+        used_by = getattr(self, "used_by", [])
+
+        assert self.__class__ not in used_by, "Recursion prevented..."
+
+        self.instances = [_(db) for _ in used_by]
+
+    def __init_subclass__(cls):
+        if not hasattr(cls, "used_by"):
+            # note: this has to be created here,
+            # otherwise 'used_by' is a shared reference between all subclasses!!!
+            cls.used_by = []
+
+        for dependency_cls in cls.uses:
+            dependency_cls.used_by.append(cls)
 
     @abc.abstractmethod
-    def up(self) -> None:
+    def up(self):
         """
         Defines the logic to apply the migration, such as creating or modifying views.
-
         This method should be implemented in subclasses for the specific migration task.
         """
 
     @abc.abstractmethod
-    def down(self) -> None:
+    def down(self):
         """
         Defines the logic to reverse the migration, such as dropping or reverting views.
-
         This method should be implemented in subclasses for the specific migration task.
         """
 
-    def __enter__(self) -> None:
+    def __enter__(self):
         """
         Context management method for entering the runtime context related to the migration.
-
         By default, this calls the `down` method to reverse or remove the migration before executing
         the block of code.
 
         Returns:
             ViewMigrationManager: The current instance of the migration manager.
         """
+        for item in reversed(self.instances):
+            item.__enter__()
+
         self.down()
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type, exc_value, traceback):
         """
         Context management method for exiting the runtime context related to the migration.
-
         This method calls the `up` method to apply the migration after the block of code finishes,
         regardless of whether an exception was raised.
 
@@ -369,6 +381,9 @@ class ViewMigrationManager(abc.ABC):
             traceback (traceback): The traceback object related to the exception (if any).
         """
         self.up()
+
+        for item in self.instances:
+            item.__exit__(exc_type, exc_value, traceback)
 
 
 @typing.overload
@@ -780,6 +795,7 @@ def list_migrations(config: Config, args: Optional[list[str]] = None) -> Ordered
 
     return registered_functions
 
+
 def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # pragma: no cover
     if "-h" in args or "--help" in args:
         print(
@@ -801,26 +817,26 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         )
         exit(0)
     if "-l" in args or "--list" in args:
-        if not import_migrations([''], config):
+        if not import_migrations([""], config):
             # nothing to do, exit with error:
             exit(1)
         db = setup_db()
         # take the content from the database to put it inside a dict.
-        rows = db(db.ewh_implemented_features).select().as_dict('name')
+        rows = db(db.ewh_implemented_features).select().as_dict("name")
         print(f"{len(registered_functions)} migrations discovered:")
         for migration_name in registered_functions:
             string = "not installed"
             # Print out the content for every row where the name has been found in registered_functions.
             if migration_name in rows:
-                if rows[migration_name]['installed']:
+                if rows[migration_name]["installed"]:
                     string = "installed"
                 print(
-                    f"    name: {migration_name},   {string},  last updated: {rows[migration_name]['last_update_dttm']}")
+                    f"    name: {migration_name},   {string},  last updated: {rows[migration_name]['last_update_dttm']}"
+                )
             else:
                 print(f"    name: {migration_name},   {string}")
         exit(0)
     config = config or get_config()
-
 
     # get the versioned lock file path, as the config performs the environment variable expansion
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
@@ -828,7 +844,6 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         if not import_migrations(args, config):
             # nothing to do, exit with error:
             exit(1)
-
 
         print("starting migrate hook")
         print(f"{len(registered_functions)} migrations discovered")
