@@ -2,6 +2,23 @@
 
 <!--next-version-placeholder-->
 
+## v0.9.0 (2024-10-03)
+
+### Feature
+
+* Added migration context manager for recreating views ([`91d782e`](https://github.com/educationwarehouse/migrate/commit/91d782e8b421e4a75941acd7978fa493de097165))
+* Issue #49 taiga edwh migrate geeft line number bij fout aan. ([`062ca59`](https://github.com/educationwarehouse/migrate/commit/062ca59b313cdfa4716082ed994e1f4791bd36fe))
+* Issue #49 taiga edwh migrate geeft line number bij fout aan. ([`f955ec1`](https://github.com/educationwarehouse/migrate/commit/f955ec1dfe2ae4c226ae682a37783d2bfd5e675c))
+
+### Fix
+
+* Use ViewManager properly ([`9905f15`](https://github.com/educationwarehouse/migrate/commit/9905f15cf9ea1b57710f8df4c9d8cc16c07f6c61))
+* Reverse dependency logic of `ViewMigrationManager` from 'used_by' to 'uses' so it works better for new views ([`f73b4f6`](https://github.com/educationwarehouse/migrate/commit/f73b4f6c2698e9bbbb1e00c49cf38954911b53ce))
+
+### Documentation
+
+* Improved typing and docs ([`9b9986a`](https://github.com/educationwarehouse/migrate/commit/9b9986a3ebf167c054146a911d3700a89bf25439))
+
 ## v0.8.1 (2024-04-24)
 ### Fix
 * Redis.from_url for better parsing + test valkey as drop-in redis replacement ([`6b842e8`](https://github.com/educationwarehouse/migrate/commit/6b842e81e43ec2874fefe29b7ee7d94115483ba1))
