@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.9.2 (2024-10-04)
+
+### Fix
+
+* Minor improvements in --list ([#3](https://github.com/educationwarehouse/migrate/issues/3)) ([`5a95ff3`](https://github.com/educationwarehouse/migrate/commit/5a95ff37b362a7abcdf182897847700434434b3f))
+
 ## v0.9.1 (2024-10-03)
 
 ### Fix
