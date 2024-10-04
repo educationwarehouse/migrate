@@ -15,14 +15,17 @@ When writing new tasks, make sure:
    forget and fail...
 """
 
+import abc
 import contextlib
 import datetime
 import importlib
+import inspect
 import os
 import pathlib
 import sqlite3
 import sys
 import time
+import traceback
 import typing
 import urllib
 import urllib.parse
@@ -47,7 +50,7 @@ from tabulate import tabulate
 try:
     from typedal import TypeDAL
 except ImportError:  # pragma: no cover
-    TypeDAL = DAL  # type: ignore
+    TypeDAL = DAL
 
 Migration: typing.TypeAlias = typing.Callable[[DAL], bool]
 
@@ -312,6 +315,80 @@ def setup_db(
         db.rollback()
         raise DatabaseNotYetInitialized(f"{config.migrate_table} is missing.", db) from e
     return db
+
+
+class ViewMigrationManager(abc.ABC):
+    # used_by: list[typing.Type["ViewMigrationManager"]] = []
+    uses: list[typing.Type["ViewMigrationManager"]] = []
+
+    def __init__(self, db: DAL):
+        """
+        Initialize the ViewMigrationManager with a database connection.
+
+        Args:
+            db (DAL): The database connection object.
+        """
+        self.db = db
+
+        used_by = getattr(self, "used_by", [])
+
+        assert self.__class__ not in used_by, "Recursion prevented..."
+
+        self.instances = [_(db) for _ in used_by]
+
+    def __init_subclass__(cls):
+        if not hasattr(cls, "used_by"):
+            # note: this has to be created here,
+            # otherwise 'used_by' is a shared reference between all subclasses!!!
+            cls.used_by = []
+
+        for dependency_cls in cls.uses:
+            dependency_cls.used_by.append(cls)
+
+    @abc.abstractmethod
+    def up(self):
+        """
+        Defines the logic to apply the migration, such as creating or modifying views.
+        This method should be implemented in subclasses for the specific migration task.
+        """
+
+    @abc.abstractmethod
+    def down(self):
+        """
+        Defines the logic to reverse the migration, such as dropping or reverting views.
+        This method should be implemented in subclasses for the specific migration task.
+        """
+
+    def __enter__(self):
+        """
+        Context management method for entering the runtime context related to the migration.
+        By default, this calls the `down` method to reverse or remove the migration before executing
+        the block of code.
+
+        Returns:
+            ViewMigrationManager: The current instance of the migration manager.
+        """
+        for item in reversed(self.instances):
+            item.__enter__()
+
+        self.down()
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Context management method for exiting the runtime context related to the migration.
+        This method calls the `up` method to apply the migration after the block of code finishes,
+        regardless of whether an exception was raised.
+
+        Args:
+            exc_type (type): The exception type raised during execution (if any).
+            exc_value (Exception): The exception instance raised during execution (if any).
+            traceback (traceback): The traceback object related to the exception (if any).
+        """
+        self.up()
+
+        for item in self.instances:
+            item.__exit__(exc_type, exc_value, traceback)
+
 
 @typing.overload
 def migration(
@@ -581,8 +658,13 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
             # and we want all the functions to be siloed and not
             # have database schema dependencies and collisions.
             db_for_this_function = setup_db()
-            result = function(db_for_this_function)
-            successes.append(result)
+            try:
+                result = function(db_for_this_function)
+                successes.append(result)
+            except Exception:
+                print(f"failed: {name} in {inspect.getfile(function)}:{inspect.getsourcelines(function)[1]}")
+                print(traceback.format_exc())
+                return False
             if result:
                 # commit the change to db
                 db_for_this_function.commit()
@@ -630,6 +712,8 @@ def schema_versioned_lock_file(
     config = config or get_config()
 
     flag_location = Path(flag_location or config.flag_location)
+    print(flag_location)
+    print("635")
     if not flag_location.exists():
         if create_flag_location or config.create_flag_location:
             flag_location.mkdir()
@@ -647,7 +731,6 @@ def schema_versioned_lock_file(
         lock_file = flag_location / f"migrate-{schema_version}.complete"
         print("Using lock file: ", lock_file)
         if lock_file.exists():
-            print('dit is een test om te kijken of migrations hier orgineel bij komt')
             print("migrate: lock file already exists, migration should be completed. Aborting migration")
             raise MigrateLockExists(str(lock_file))
         else:
@@ -775,7 +858,7 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         if not import_migrations(args, config):
             # nothing to do, exit with error:
             exit(1)
-
+        print(import_migrations(args, config))
 
         print("starting migrate hook")
         print(f"{len(registered_functions)} migrations discovered")
