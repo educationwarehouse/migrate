@@ -806,7 +806,10 @@ def list_migrations(config: Config, args: Optional[list[str]] = None) -> Ordered
 
     return registered_functions
 
-def print_list(config):
+def print_migrations_status_table(config: Config):
+    """
+    Output a table to display each registered migration with status (success, failed, new).
+    """
     if not import_migrations([], config):
         # nothing to do, exit with error:
         exit(1)
@@ -826,7 +829,7 @@ def print_list(config):
             table.append([migration_name, string, rows[migration_name]['last_update_dttm']])
         else:
             table.append([migration_name, 'missing', 'N/A'])
-    print(tabulate(table, headers=["Migration Name", "Installation", "Last Updated"]))
+    print(tabulate(table, headers=["Migration Name", "Status", "Last Updated"]))
 
 def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # pragma: no cover
     if "-h" in args or "--help" in args:
@@ -850,7 +853,7 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         exit(0)
     config = config or get_config()
     if "-l" in args or "--list" in args:
-        print_list(config)
+        print_migrations_status_table(config)
         exit(0)
     # get the versioned lock file path, as the config performs the environment variable expansion
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
