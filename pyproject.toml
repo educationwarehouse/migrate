@@ -28,6 +28,7 @@ dependencies = [
     'redis',
     'python-dotenv',
     'configuraptor>=1.23',
+    'tabulate',
 ]
 
 [project.optional-dependencies]
