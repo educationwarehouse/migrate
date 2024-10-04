@@ -647,6 +647,7 @@ def schema_versioned_lock_file(
         lock_file = flag_location / f"migrate-{schema_version}.complete"
         print("Using lock file: ", lock_file)
         if lock_file.exists():
+            print('dit is een test om te kijken of migrations hier orgineel bij komt')
             print("migrate: lock file already exists, migration should be completed. Aborting migration")
             raise MigrateLockExists(str(lock_file))
         else:
@@ -722,8 +723,8 @@ def list_migrations(config: Config, args: Optional[list[str]] = None) -> Ordered
 
     return registered_functions
 
-def get_list(config):
-    if not import_migrations([''], config):
+def print_list(config):
+    if not import_migrations([], config):
         # nothing to do, exit with error:
         exit(1)
     db = setup_db()
@@ -764,12 +765,10 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         """
         )
         exit(0)
-    if "-l" in args or "--list" in args:
-        get_list(config)
-        exit(0)
     config = config or get_config()
-
-
+    if "-l" in args or "--list" in args:
+        print_list(config)
+        exit(0)
     # get the versioned lock file path, as the config performs the environment variable expansion
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
 
