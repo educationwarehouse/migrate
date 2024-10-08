@@ -712,8 +712,6 @@ def schema_versioned_lock_file(
     config = config or get_config()
 
     flag_location = Path(flag_location or config.flag_location)
-    print(flag_location)
-    print("635")
     if not flag_location.exists():
         if create_flag_location or config.create_flag_location:
             flag_location.mkdir()
@@ -806,6 +804,7 @@ def list_migrations(config: Config, args: Optional[list[str]] = None) -> Ordered
 
     return registered_functions
 
+
 def print_migrations_status_table(config: Config):
     """
     Output a table to display each registered migration with status (success, failed, new).
@@ -815,7 +814,7 @@ def print_migrations_status_table(config: Config):
         exit(1)
     db = setup_db()
     # take the content from the database to put it inside a dict.
-    rows = db(db.ewh_implemented_features).select().as_dict('name')
+    rows = db(db.ewh_implemented_features).select().as_dict("name")
     table = []
     print(f"{len(registered_functions)} migrations discovered:")
 
@@ -823,13 +822,14 @@ def print_migrations_status_table(config: Config):
         string = "failed"
         # Print out the content for every row where the name has been found in registered_functions.
         if migration_name in rows:
-            if rows[migration_name]['installed']:
+            if rows[migration_name]["installed"]:
                 string = "succeeded"
             # print(f"    name: {migration_name},   {string},  last updated: {rows[migration_name]['last_update_dttm']}")
-            table.append([migration_name, string, rows[migration_name]['last_update_dttm']])
+            table.append([migration_name, string, rows[migration_name]["last_update_dttm"]])
         else:
-            table.append([migration_name, 'missing', 'N/A'])
+            table.append([migration_name, "missing", "N/A"])
     print(tabulate(table, headers=["Migration Name", "Status", "Last Updated"]))
+
 
 def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # pragma: no cover
     if "-h" in args or "--help" in args:
@@ -857,7 +857,6 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         exit(0)
     # get the versioned lock file path, as the config performs the environment variable expansion
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
-
         if not import_migrations(args, config):
             # nothing to do, exit with error:
             exit(1)
