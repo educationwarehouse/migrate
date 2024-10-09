@@ -2,6 +2,10 @@
 
 <!--next-version-placeholder-->
 
+## v0.9.4 (2024-10-09)
+### Fix
+* Don't require psyopg2 to always be installed (allow sqlite-only) ([`120ba46`](https://github.com/educationwarehouse/migrate/commit/120ba4673405bbb4cbe811fa191766ea92ba3254))
+
 ## v0.9.3 (2024-10-08)
 ### Fix
 * Remove debug prints ([`8146987`](https://github.com/educationwarehouse/migrate/commit/814698720e3844efc2e44b09744da8f7d295688a))
