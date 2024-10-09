@@ -15,6 +15,8 @@
 
 ```console
 pip install edwh-migrate
+# or to include extra dependencies (psycopg2, redis):
+pip install edwh-migrate[full]
 ```
 
 ## Documentation

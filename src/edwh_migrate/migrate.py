@@ -37,15 +37,14 @@ from typing import Optional
 import configuraptor
 import dotenv
 import plumbum
-import psycopg2
-import psycopg2.errors
-import redis
 from configuraptor import alias, asdict, postpone
 from configuraptor.errors import ConfigErrorMissingKey, IsPostponedError
 from dotenv import find_dotenv
 from pydal import DAL, Field
 from pydal.objects import Table
 from tabulate import tabulate
+
+from .postgres import PostgresError, PostgresUndefinedTable
 
 try:
     from typedal import TypeDAL
@@ -298,7 +297,7 @@ def setup_db(
         print("Setting up for long running connection")
         try:
             db.executesql(f"PGPOOL SET client_idle_limit = {long_running if str(long_running).isdigit() else 3600};")
-        except psycopg2.errors.Error:
+        except PostgresError:
             # maybe not using PGPOOL, ignore
             db.rollback()
 
@@ -311,7 +310,7 @@ def setup_db(
 
     try:
         db(db.ewh_implemented_features).count()
-    except (psycopg2.errors.UndefinedTable, sqlite3.OperationalError) as e:
+    except (PostgresUndefinedTable, sqlite3.OperationalError) as e:
         db.rollback()
         raise DatabaseNotYetInitialized(f"{config.migrate_table} is missing.", db) from e
     return db
@@ -690,6 +689,8 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
     # clean redis whenever possible
     # reads REDIS_MASTER_HOST from the environment
     if redis_host := config.redis_host:
+        import redis
+
         if not redis_host.startswith("redis://"):
             redis_host = f"redis://{redis_host}"
 

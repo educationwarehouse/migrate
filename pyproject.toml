@@ -23,15 +23,19 @@ classifiers = [
 ]
 dependencies = [
     "pydal>=20221110.1",
-    'plumbum',
-    'psycopg2-binary',
-    'redis',
-    'python-dotenv',
-    'configuraptor>=1.23',
-    'tabulate',
+    "plumbum",
+    "python-dotenv",
+    "configuraptor>=1.23",
+    "tabulate",
+    "legacy-cgi; python_version >= '3.13'"
 ]
 
 [project.optional-dependencies]
+full = [
+    "redis",
+    "psycopg2-binary",
+]
+
 dev = [
     "hatch",
     "python-semantic-release<8",
@@ -42,6 +46,9 @@ dev = [
     "contextlib-chdir",
     "testcontainers",
     "SQLAlchemy-Utils", # for drop_database
+    # from full:
+    "redis",
+    "psycopg2-binary",
 ]
 
 [template.plugins.default]
