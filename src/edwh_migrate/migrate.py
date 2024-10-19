@@ -787,7 +787,6 @@ def import_migrations(args: list[str], config: Config) -> bool:
         sys.path.insert(0, str(arg.parent))
         # importing the migrations.py file will register the functions
         importlib.import_module(arg.stem)
-        print(f"Calling down from Scatland: {config.migrations_file}")
         return True
 
     elif Path("migrations.py").exists():
