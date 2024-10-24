@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.9.6 (2024-10-24)
+
+### Documentation
+
+* Added explanation about `ViewMigrationManager` ([`f044860`](https://github.com/educationwarehouse/migrate/commit/f04486019427b06c4acf6083f4c6a315791b0ad6))
+
 ## v0.9.5 (2024-10-19)
 
 ### Fix
