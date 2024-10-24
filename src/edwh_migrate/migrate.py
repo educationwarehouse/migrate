@@ -26,6 +26,7 @@ import sqlite3
 import sys
 import time
 import traceback
+import types
 import typing
 import urllib
 import urllib.parse
@@ -37,15 +38,14 @@ from typing import Optional
 import configuraptor
 import dotenv
 import plumbum
-import psycopg2
-import psycopg2.errors
-import redis
 from configuraptor import alias, asdict, postpone
 from configuraptor.errors import ConfigErrorMissingKey, IsPostponedError
 from dotenv import find_dotenv
 from pydal import DAL, Field
 from pydal.objects import Table
 from tabulate import tabulate
+
+from .postgres import PostgresError, PostgresUndefinedTable
 
 try:
     from typedal import TypeDAL
@@ -298,7 +298,7 @@ def setup_db(
         print("Setting up for long running connection")
         try:
             db.executesql(f"PGPOOL SET client_idle_limit = {long_running if str(long_running).isdigit() else 3600};")
-        except psycopg2.errors.Error:
+        except PostgresError:
             # maybe not using PGPOOL, ignore
             db.rollback()
 
@@ -311,10 +311,13 @@ def setup_db(
 
     try:
         db(db.ewh_implemented_features).count()
-    except (psycopg2.errors.UndefinedTable, sqlite3.OperationalError) as e:
+    except (PostgresUndefinedTable, sqlite3.OperationalError) as e:
         db.rollback()
         raise DatabaseNotYetInitialized(f"{config.migrate_table} is missing.", db) from e
     return db
+
+
+E = typing.TypeVar("E", bound=Exception)
 
 
 class ViewMigrationManager(abc.ABC):
@@ -391,8 +394,9 @@ class ViewMigrationManager(abc.ABC):
             regardless of whether an exception was raised.
     """
 
-    # used_by: list[typing.Type["ViewMigrationManager"]] = []
-    uses: list[typing.Type["ViewMigrationManager"]] = []
+    uses: typing.Iterable[typing.Type["ViewMigrationManager"]] = ()
+    # note: manually setting `used_by` is deprecated!
+    used_by: list[typing.Type["ViewMigrationManager"]]
 
     def __init__(self, db: DAL):
         """
@@ -409,7 +413,7 @@ class ViewMigrationManager(abc.ABC):
 
         self.instances = [_(db) for _ in used_by]
 
-    def __init_subclass__(cls):
+    def __init_subclass__(cls) -> None:
         if not hasattr(cls, "used_by"):
             # note: this has to be created here,
             # otherwise 'used_by' is a shared reference between all subclasses!!!
@@ -419,20 +423,20 @@ class ViewMigrationManager(abc.ABC):
             dependency_cls.used_by.append(cls)
 
     @abc.abstractmethod
-    def up(self):
+    def up(self) -> None:
         """
         Defines the logic to apply the migration, such as creating or modifying views.
         This method should be implemented in subclasses for the specific migration task.
         """
 
     @abc.abstractmethod
-    def down(self):
+    def down(self) -> None:
         """
         Defines the logic to reverse the migration, such as dropping or reverting views.
         This method should be implemented in subclasses for the specific migration task.
         """
 
-    def __enter__(self):
+    def __enter__(self) -> None:
         """
         Context management method for entering the runtime context related to the migration.
         By default, this calls the `down` method to reverse or remove the migration before executing
@@ -446,7 +450,7 @@ class ViewMigrationManager(abc.ABC):
 
         self.down()
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    def __exit__(self, exc_type: typing.Type[E], exc_value: E, tb: types.TracebackType) -> None:
         """
         Context management method for exiting the runtime context related to the migration.
         This method calls the `up` method to apply the migration after the block of code finishes,
@@ -455,7 +459,7 @@ class ViewMigrationManager(abc.ABC):
         Args:
             exc_type (type): The exception type raised during execution (if any).
             exc_value (Exception): The exception instance raised during execution (if any).
-            traceback (traceback): The traceback object related to the exception (if any).
+            tb (traceback): The traceback object related to the exception (if any).
         """
         self.up()
 
@@ -763,6 +767,8 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
     # clean redis whenever possible
     # reads REDIS_MASTER_HOST from the environment
     if redis_host := config.redis_host:
+        import redis
+
         if not redis_host.startswith("redis://"):
             redis_host = f"redis://{redis_host}"
 
@@ -785,8 +791,6 @@ def schema_versioned_lock_file(
     config = config or get_config()
 
     flag_location = Path(flag_location or config.flag_location)
-    print(flag_location)
-    print("635")
     if not flag_location.exists():
         if create_flag_location or config.create_flag_location:
             flag_location.mkdir()
@@ -855,7 +859,6 @@ def import_migrations(args: list[str], config: Config) -> bool:
         sys.path.insert(0, str(arg.parent))
         # importing the migrations.py file will register the functions
         importlib.import_module(arg.stem)
-        print(f"Calling down from Scatland: {config.migrations_file}")
         return True
 
     elif Path("migrations.py").exists():
@@ -880,7 +883,7 @@ def list_migrations(config: Config, args: Optional[list[str]] = None) -> Ordered
     return registered_functions
 
 
-def print_migrations_status_table(config: Config):
+def print_migrations_status_table(config: Config) -> None:
     """
     Output a table to display each registered migration with status (success, failed, new).
     """
@@ -894,15 +897,13 @@ def print_migrations_status_table(config: Config):
     print(f"{len(registered_functions)} migrations discovered:")
 
     for migration_name in registered_functions:
-        string = "failed"
         # Print out the content for every row where the name has been found in registered_functions.
         if migration_name in rows:
-            if rows[migration_name]["installed"]:
-                string = "succeeded"
-            # print(f"    name: {migration_name},   {string},  last updated: {rows[migration_name]['last_update_dttm']}")
-            table.append([migration_name, string, rows[migration_name]["last_update_dttm"]])
+            status = "succeeded" if rows[migration_name]["installed"] else "failed"
+            table.append([migration_name, status, rows[migration_name]["last_update_dttm"]])
         else:
             table.append([migration_name, "missing", "N/A"])
+
     print(tabulate(table, headers=["Migration Name", "Status", "Last Updated"]))
 
 
@@ -914,7 +915,7 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
 
         The database connection url is read from the MIGRATE_URI environment variable.
         It should be a pydal compatible connection string.
-        
+
         use -l or --list to get a list of migrations.
 
         ## Testing migrations using sqlite
@@ -932,7 +933,6 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         exit(0)
     # get the versioned lock file path, as the config performs the environment variable expansion
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
-
         if not import_migrations(args, config):
             # nothing to do, exit with error:
             exit(1)

@@ -2,6 +2,21 @@
 
 <!--next-version-placeholder-->
 
+## v0.9.5 (2024-10-19)
+
+### Fix
+
+* Remove Bonne's debug message ([`e259c21`](https://github.com/educationwarehouse/migrate/commit/e259c2190e4628e67a207e741f65cf25228c386e))
+
+## v0.9.4 (2024-10-09)
+### Fix
+* Don't require psyopg2 to always be installed (allow sqlite-only) ([`120ba46`](https://github.com/educationwarehouse/migrate/commit/120ba4673405bbb4cbe811fa191766ea92ba3254))
+
+## v0.9.3 (2024-10-08)
+### Fix
+* Remove debug prints ([`8146987`](https://github.com/educationwarehouse/migrate/commit/814698720e3844efc2e44b09744da8f7d295688a))
+* Improvements in --list ([#4](https://github.com/educationwarehouse/migrate/issues/4)) ([`1eefb24`](https://github.com/educationwarehouse/migrate/commit/1eefb245fa896c5862a8c63feeebed8b5d5acffd))
+
 ## v0.9.2 (2024-10-04)
 
 ### Fix

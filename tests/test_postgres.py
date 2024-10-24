@@ -2,7 +2,8 @@ import shutil
 import tempfile
 from pathlib import Path
 
-import psycopg2
+from src.edwh_migrate.postgres import PostgresUndefinedTable
+
 import pytest
 from configuraptor import Singleton
 from pydal import DAL
@@ -91,7 +92,7 @@ def psql_backup():
 def test_postgres_backup(conn_str: str, tempdir: str):
     db = DAL(conn_str)
 
-    with pytest.raises(psycopg2.errors.UndefinedTable):
+    with pytest.raises(PostgresUndefinedTable):
         db.executesql("SELECT count(*) FROM ewh_implemented_features")
     db.rollback()
 

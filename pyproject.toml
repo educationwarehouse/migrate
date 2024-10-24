@@ -18,30 +18,40 @@ classifiers = [
     "Programming Language :: Python",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
     "pydal>=20221110.1",
-    'plumbum',
-    'psycopg2-binary',
-    'redis',
-    'python-dotenv',
-    'configuraptor>=1.23',
-    'tabulate',
+    "plumbum",
+    "python-dotenv",
+    "configuraptor>=1.23",
+    "tabulate",
+    "legacy-cgi; python_version >= '3.13'"
 ]
 
 [project.optional-dependencies]
+full = [
+    "redis",
+    "psycopg2-binary",
+]
+
 dev = [
     "hatch",
     "python-semantic-release<8",
     "black",
+    "typedal",
     "isort",
     "pytest",
     "pytest-cov",
     "contextlib-chdir",
     "testcontainers",
     "SQLAlchemy-Utils", # for drop_database
+    # from full:
+    "redis",
+    "psycopg2-binary",
 ]
 
 [template.plugins.default]

@@ -223,9 +223,10 @@ def test_schema_versioned_lock_file(capsys, clean_migrate):
         [_.unlink() for _ in flag_dir.glob("*")]
         flag_dir.rmdir()
 
+    config.create_flag_location = False
     with pytest.raises(NotADirectoryError):
-        with schema_versioned_lock_file() as lock:
-            pass
+        with schema_versioned_lock_file(config=config) as lock:
+            assert not lock
 
     config.schema_version = None
 
