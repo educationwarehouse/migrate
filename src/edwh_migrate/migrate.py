@@ -318,6 +318,79 @@ def setup_db(
 
 
 class ViewMigrationManager(abc.ABC):
+    """
+    A base class for managing the lifecycle of view migrations in a database using context management.
+
+    This class provides an abstract framework for creating, managing, and reversing database views,
+    ensuring that migrations are properly handled with dependencies between different migrations.
+
+    Attributes:
+        uses (list[typing.Type["ViewMigrationManager"]]): A list of other ViewMigrationManager classes
+            that the current class depends on.
+
+    Example:
+        1. Define a subclass that implements specific migration logic:
+
+        ```python
+        class MyExampleView_V2(ViewMigrationManager):
+            def up(self):
+                self.db.executesql(
+                    '''
+                    CREATE MATERIALIZED VIEW my_example_view AS
+                    SELECT id, name FROM my_table;
+                    '''
+                )
+
+            def down(self):
+                self.db.executesql(
+                    '''
+                    DROP MATERIALIZED VIEW IF EXISTS my_example_view;
+                    '''
+                )
+        ```
+
+        2. Use the subclass in a migration function:
+
+        ```python
+        @migration
+        def upgrade_vnk_boards_to_user_org_gid_instead_of_org_tag_gid_20241023_001(db):
+            with MyExampleView_V2(db):
+                db.executesql('''
+                -- Perform operations that might affect `my_example_view`
+                ''')
+            db.commit()
+            return True
+        ```
+
+        In this example:
+        - The `down` method will drop the `my_example_view` before the block of code is executed.
+        - The SQL operations inside the block will run.
+        - The `up` method will recreate the `my_example_view` after the block completes.
+
+    Methods:
+        __init__(db: DAL):
+            Initializes the manager with the provided database connection.
+
+        __init_subclass__():
+            Handles subclass initialization, ensuring proper tracking of dependencies
+            using the `uses` and `used_by` attributes.
+
+        up():
+            Abstract method to define the migration logic. Subclasses must implement this to
+            define how the view should be created or modified.
+
+        down():
+            Abstract method to define the rollback logic. Subclasses must implement this to
+            define how the view should be dropped or reverted.
+
+        __enter__():
+            Context management for reversing the migration before executing a block of code.
+
+        __exit__(exc_type, exc_value, traceback):
+            Context management for applying the migration after a block of code has executed,
+            regardless of whether an exception was raised.
+    """
+
     # used_by: list[typing.Type["ViewMigrationManager"]] = []
     uses: list[typing.Type["ViewMigrationManager"]] = []
 
@@ -806,6 +879,7 @@ def list_migrations(config: Config, args: Optional[list[str]] = None) -> Ordered
 
     return registered_functions
 
+
 def print_migrations_status_table(config: Config):
     """
     Output a table to display each registered migration with status (success, failed, new).
@@ -815,7 +889,7 @@ def print_migrations_status_table(config: Config):
         exit(1)
     db = setup_db()
     # take the content from the database to put it inside a dict.
-    rows = db(db.ewh_implemented_features).select().as_dict('name')
+    rows = db(db.ewh_implemented_features).select().as_dict("name")
     table = []
     print(f"{len(registered_functions)} migrations discovered:")
 
@@ -823,13 +897,14 @@ def print_migrations_status_table(config: Config):
         string = "failed"
         # Print out the content for every row where the name has been found in registered_functions.
         if migration_name in rows:
-            if rows[migration_name]['installed']:
+            if rows[migration_name]["installed"]:
                 string = "succeeded"
             # print(f"    name: {migration_name},   {string},  last updated: {rows[migration_name]['last_update_dttm']}")
-            table.append([migration_name, string, rows[migration_name]['last_update_dttm']])
+            table.append([migration_name, string, rows[migration_name]["last_update_dttm"]])
         else:
-            table.append([migration_name, 'missing', 'N/A'])
+            table.append([migration_name, "missing", "N/A"])
     print(tabulate(table, headers=["Migration Name", "Status", "Last Updated"]))
+
 
 def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # pragma: no cover
     if "-h" in args or "--help" in args:
