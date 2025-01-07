@@ -102,6 +102,17 @@ class ViewMigrationManager(abc.ABC):
         """
         return ""
 
+    @classproperty
+    def until(cls) -> str:
+        """
+        Migration after which this class should no longer be used.
+
+        This attribute specifies the migration after which this view migration manager
+        should not be utilized. It ensures that new migrations do not use views or logic
+        from this class beyond the specified migration.
+        """
+        return ""
+
     # note: manually setting `used_by` is deprecated!
     _used_by: list[typing.Type["ViewMigrationManager"]]
 
@@ -153,7 +164,7 @@ class ViewMigrationManager(abc.ABC):
         """
         Perform checks to know whether this dependency is active.
         """
-        return self.check_since()  # and ... ?
+        return self.check_since() and self.check_until()
 
     def check_since(self) -> bool:
         """
@@ -168,6 +179,20 @@ class ViewMigrationManager(abc.ABC):
         query &= db.ewh_implemented_features.installed == True
 
         return db(query).count() > 0
+
+    def check_until(self) -> bool:
+        """
+        If an 'until' is specified, that migration should not have run yet at this point.
+        """
+        db = self.db
+
+        if not (until := self.until):
+            return True
+
+        query = db.ewh_implemented_features.name == until
+        query &= db.ewh_implemented_features.installed == True
+
+        return db(query).count() == 0
 
     @abc.abstractmethod
     def up(self) -> None:
