@@ -187,6 +187,8 @@ In the example above:
 - The `migration` decorator is used to define a migration function (`upgrade_some_source_table_that_my_example_view_depends_on`) that executes within the context of `MyExampleView_V1`.
 - The `with MyExampleView_V1(db)` block ensures that the `down` method is called before the block executes and the `up` method is called after the block completes.
 
+In addition to 'since', the inverse 'until' can also be used.
+
 ## License
 
 `edwh-migrate` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
