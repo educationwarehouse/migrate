@@ -12,6 +12,7 @@ license-expression = "MIT"
 keywords = ['pydal', 'postgresql', 'migrate', 'schema-change', 'database-migration']
 authors = [
     { name = "Remco", email = "remco@educationwarehouse.nl" },
+    { name = "Robin", email = "robin@educationwarehouse.nl" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
