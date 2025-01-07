@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.9.8 (2025-01-07)
+
+### Fix
+
+* Don't crash, just warn, if `uses` is not explicitly set ([`a74b1a1`](https://github.com/educationwarehouse/migrate/commit/a74b1a1742a1a7e5433587a8890469c24fb1f684))
+
 ## v0.9.7 (2025-01-07)
 
 
