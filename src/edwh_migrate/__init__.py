@@ -16,7 +16,7 @@ When writing new tasks, make sure:
 
 """
 
-from .helpers import abstractclassproperty, classproperty
+from .helpers import classproperty
 from .migrate import (
     Config,
     InvalidConfigException,
@@ -47,6 +47,5 @@ __all__ = [
     "list_migrations",
     "mark_migration",
     "ViewMigrationManager",
-    "abstractclassproperty",
     "classproperty",
 ]

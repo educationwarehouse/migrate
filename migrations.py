@@ -9,6 +9,8 @@ from edwh_migrate import ViewMigrationManager, migration
 
 class ExampleDependency(ViewMigrationManager):
     # will also run used_by (= ExampleViewManager)
+    uses = ()
+    since = "feature_3"
 
     def down(self):
         print("2. this happens before before the migration", self.db._uri)

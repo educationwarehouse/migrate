@@ -5,7 +5,7 @@ import warnings
 
 from pydal import DAL
 
-from .helpers import abstractclassproperty
+from .helpers import classproperty
 
 E = typing.TypeVar("E", bound=Exception)
 
@@ -84,10 +84,23 @@ class ViewMigrationManager(abc.ABC):
             regardless of whether an exception was raised.
     """
 
-    @abstractclassproperty
+    @abc.abstractmethod
+    @classproperty
     def uses(cls) -> typing.Iterable[typing.Type["ViewMigrationManager"]]:
+        """
+        List/tuple of view migration classes that this one depends on.
+        """
         warnings.warn(f"Class {cls} has default 'uses'? This may indicate missing dependencies!")
         return ()
+
+    @classproperty
+    def since(cls) -> str:
+        """
+        Migration that must have run before this migration becomes relevant.
+
+        Otherwise, old migrations may break due to new dependencies and we definitely don't want that!
+        """
+        return ""
 
     # note: manually setting `used_by` is deprecated!
     _used_by: list[typing.Type["ViewMigrationManager"]]
@@ -136,6 +149,26 @@ class ViewMigrationManager(abc.ABC):
         for dependency_cls in dependencies:
             dependency_cls._used_by.append(cls)
 
+    def should_run(self) -> bool:
+        """
+        Perform checks to know whether this dependency is active.
+        """
+        return self.check_since()  # and ... ?
+
+    def check_since(self) -> bool:
+        """
+        If a 'since' is specified, that migration should have run already at this point.
+        """
+        db = self.db
+
+        if not (since := self.since):
+            return True
+
+        query = db.ewh_implemented_features.name == since
+        query &= db.ewh_implemented_features.installed == True
+
+        return db(query).count() > 0
+
     @abc.abstractmethod
     def up(self) -> None:
         """
@@ -159,6 +192,9 @@ class ViewMigrationManager(abc.ABC):
         Returns:
             ViewMigrationManager: The current instance of the migration manager.
         """
+        if not self.should_run():
+            return
+
         for item in reversed(self.instances):
             item.__enter__()
 
@@ -178,6 +214,9 @@ class ViewMigrationManager(abc.ABC):
         """
         if exc_type:
             # block failed, don't try to go up!
+            return
+
+        if not self.should_run():
             return
 
         if not self.may_go_up:

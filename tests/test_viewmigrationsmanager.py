@@ -2,15 +2,30 @@ from sqlite3 import OperationalError
 
 import pytest
 
-from src.edwh_migrate import ViewMigrationManager, setup_db
+from src.edwh_migrate import (
+    ViewMigrationManager,
+    migrate,
+)
 
 from .fixtures import clean_migrate
 
 
 class StandaloneView(ViewMigrationManager):
+    since = "first_migration"
+
     def up(self): ...
 
     def down(self): ...
+
+
+class Ignored(ViewMigrationManager):
+    since = "second_migration"  # doesn't exist
+
+    def up(self):
+        2 / 0
+
+    def down(self):
+        1 / 0
 
 
 class MyBaseView(ViewMigrationManager):
@@ -62,13 +77,27 @@ class MyChildView2(ViewMigrationManager):
 
 
 def test_resolving_manager_order(clean_migrate):
-    db = setup_db(migrate=True, migrate_enabled=True)
+    @migrate.migration()
+    def first_migration(db):
+        return True
+
+    config = migrate.get_config()
+
+    assert len(migrate.registered_functions) == 1
+    assert migrate.activate_migrations(config=config)
+
+    db = migrate.setup_db(config=config)
+
+    assert db(db.ewh_implemented_features).count()
 
     # one should be fine:
     with MyChildView2(db):
         ...
 
     with MyBaseView(db):
+        ...
+
+    with StandaloneView(db), Ignored(db):
         ...
 
     # multiple without combine may crash:

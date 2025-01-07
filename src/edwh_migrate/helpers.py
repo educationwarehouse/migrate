@@ -3,6 +3,7 @@ import typing
 
 T = typing.TypeVar("T")
 
+
 class classproperty:
     def __init__(self, fget: typing.Callable[[typing.Type[T]], typing.Any]) -> None:
         """
@@ -27,14 +28,4 @@ class classproperty:
         return self.fget(owner)
 
 
-def abstractclassproperty(method: typing.Callable[[typing.Type[T]], typing.Any]) -> classproperty:
-    """
-    Create an abstract class property.
-
-    Args:
-        method: A function that takes the class as an argument and returns a value.
-
-    Returns:
-        A classproperty that is also marked as an abstract method.
-    """
-    return classproperty(abc.abstractmethod(method))
+# something like @abstractclassproperty doesn't work, otherwise pycharm won't detect it as abstract!
