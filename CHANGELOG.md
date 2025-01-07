@@ -2,6 +2,16 @@
 
 <!--next-version-placeholder-->
 
+## v0.10.0 (2025-01-07)
+
+### Feature
+
+* Allow specifying a 'since' for subclasses of `ViewMigrationManager`, which indicates a migration that should have already run. ([`0cc6d29`](https://github.com/educationwarehouse/migrate/commit/0cc6d2961026fb10ffa3db693035aa7aa135d889))
+
+### Documentation
+
+* Explained ViewMigrationManager and the new `since` option ([`20a239f`](https://github.com/educationwarehouse/migrate/commit/20a239fc9ae8956d7c044de4109e63aebfc141ba))
+
 ## v0.9.9 (2025-01-07)
 
 ### Performance
