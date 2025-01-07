@@ -2,6 +2,13 @@
 
 <!--next-version-placeholder-->
 
+## v0.9.7-beta.1 (2025-01-07)
+
+### Fix
+
+* Dependencies should be executed once instead of multiple times! ([`cb88c95`](https://github.com/educationwarehouse/migrate/commit/cb88c95a35345906ee33b522966c3da575d78594))
+* Make `uses` an abstract class property so subclasses have to explicitly specify it. ([`006b832`](https://github.com/educationwarehouse/migrate/commit/006b832fa9aba01624f32a0c48bb3bae5179b383))
+
 ## v0.9.6 (2024-10-24)
 
 ### Documentation
