@@ -405,23 +405,40 @@ class ViewMigrationManager(abc.ABC):
     # note: manually setting `used_by` is deprecated!
     _used_by: list[typing.Type["ViewMigrationManager"]]
 
-    def __init__(self, db: DAL):
+    may_go_up = False
+
+    def __init__(self, db: DAL, cache: dict = None):
         """
         Initialize the ViewMigrationManager with a database connection.
 
         Args:
             db (DAL): The database connection object.
         """
+        if cache is None:
+            cache = {}
+
         self.db = db
 
         used_by = getattr(self, "_used_by", [])
 
         assert self.__class__ not in used_by, "Recursion prevented..."
 
-        self.instances = tuple(_(db) for _ in used_by)
+        # self.instances = tuple(_(db, cache) for _ in used_by)
+
+        instances = []
+        for dep in used_by:
+            if dep in cache:
+                # re-used classes should use the same instance (but configuraptor.Singleton doesn't work here):
+                i = cache[dep]
+            else:
+                i = dep(db, cache)
+                cache[dep] = i
+            instances.append(i)
+
+        self.instances = instances
 
     def __init_subclass__(cls) -> None:
-        if not hasattr(cls, "used_by"):
+        if not hasattr(cls, "_used_by"):
             # note: this has to be created here,
             # otherwise 'used_by' is a shared reference between all subclasses!!!
             cls._used_by = []
@@ -459,6 +476,7 @@ class ViewMigrationManager(abc.ABC):
             item.__enter__()
 
         self.down()
+        self.may_go_up = True
 
     def __exit__(self, exc_type: typing.Type[E], exc_value: E, tb: types.TracebackType) -> None:
         """
@@ -475,10 +493,25 @@ class ViewMigrationManager(abc.ABC):
             # block failed, don't try to go up!
             return
 
+        if not self.may_go_up:
+            # didn't go down properly or already executed!
+            return
+
         self.up()
+        self.may_go_up = False
 
         for item in self.instances:
             item.__exit__(exc_type, exc_value, traceback)
+
+    # @classmethod
+    # def combine(cls, *managers: typing.Self) -> typing.Self:
+    #     """
+    #     Combine multiple managers (with dependencies) into one manager, deduplicating these dependencies.
+    #     """
+    #     first_db = managers[0].db
+    #     assert all(_.db is first_db for _ in managers), "Can not combine managers which use different databases!"
+    #
+    #     return cls(first_db)
 
 
 @typing.overload
