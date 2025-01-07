@@ -16,11 +16,11 @@ When writing new tasks, make sure:
 
 """
 
+from .helpers import abstractclassproperty, classproperty
 from .migrate import (
     Config,
     InvalidConfigException,
     UnknownConfigException,
-    ViewMigrationManager,
     activate_migrations,
     get_config,
     list_migrations,
@@ -31,6 +31,7 @@ from .migrate import (
     setup_db,
 )
 from .migrate import _console_hook as console_hook
+from .view_migration_manager import ViewMigrationManager
 
 __all__ = [
     "registered_functions",
@@ -46,4 +47,6 @@ __all__ = [
     "list_migrations",
     "mark_migration",
     "ViewMigrationManager",
+    "abstractclassproperty",
+    "classproperty",
 ]

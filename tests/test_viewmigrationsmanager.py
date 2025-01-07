@@ -7,6 +7,12 @@ from src.edwh_migrate import ViewMigrationManager, setup_db
 from .fixtures import clean_migrate
 
 
+class StandaloneView(ViewMigrationManager):
+    def up(self): ...
+
+    def down(self): ...
+
+
 class MyBaseView(ViewMigrationManager):
     uses = ()
 
