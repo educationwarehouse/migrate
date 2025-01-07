@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.10.1 (2025-01-07)
+
+### Fix
+
+* Include 'until' which is the inverse of 'since' ([`d502aa2`](https://github.com/educationwarehouse/migrate/commit/d502aa2da30a597a8052bfbecc3b7044cdf74d21))
+
 ## v0.10.0 (2025-01-07)
 
 ### Feature
