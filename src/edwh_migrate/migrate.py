@@ -784,7 +784,6 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
         if not import_migrations(args, config):
             # nothing to do, exit with error:
             exit(1)
-        print(import_migrations(args, config))
 
         print("starting migrate hook")
         print(f"{len(registered_functions)} migrations discovered")
