@@ -7,7 +7,7 @@ from src.edwh_migrate import (
     migrate,
 )
 
-from .fixtures import clean_migrate
+from .fixtures import clean_migrate, sqlite_empty, tmp_empty_sqlite_db_file, tmp_sqlite_folder  # noqa
 
 
 class StandaloneView(ViewMigrationManager):
@@ -76,9 +76,12 @@ class MyChildView2(ViewMigrationManager):
         """)
 
 
-def test_resolving_manager_order(clean_migrate):
+def test_resolving_manager_order(tmp_empty_sqlite_db_file, clean_migrate):
     @migrate.migration()
     def first_migration(db):
+        with StandaloneView(db), Ignored(db):
+            ...
+
         return True
 
     config = migrate.get_config()
@@ -95,9 +98,6 @@ def test_resolving_manager_order(clean_migrate):
         ...
 
     with MyBaseView(db):
-        ...
-
-    with StandaloneView(db), Ignored(db):
         ...
 
     # multiple without combine may crash:

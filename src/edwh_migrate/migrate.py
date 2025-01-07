@@ -43,6 +43,7 @@ from pydal import DAL, Field
 from pydal.objects import Table
 from tabulate import tabulate
 
+from .constants import CURRENT_MIGRATION
 from .postgres import PostgresError, PostgresUndefinedTable
 
 try:
@@ -578,6 +579,12 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
         print("test:", name)
         if should_run(db, name):
             print("run: ", name)
+            # black magic fuckery via env
+            # but ewh_implemented doesn't really support adding new columns
+            # (such as active)
+            # + this doesn't require database lookups so it's more performant too :)
+            os.environ[CURRENT_MIGRATION] = name
+
             # create a new database connection
             # because there could be tables being defined,
             # and we want all the functions to be siloed and not
@@ -590,6 +597,7 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
                 print(f"failed: {name} in {inspect.getfile(function)}:{inspect.getsourcelines(function)[1]}")
                 print(traceback.format_exc())
                 return False
+
             if result:
                 # commit the change to db
                 db_for_this_function.commit()

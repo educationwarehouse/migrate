@@ -1,10 +1,12 @@
 import abc
+import os
 import types
 import typing
 import warnings
 
 from pydal import DAL
 
+from .constants import CURRENT_MIGRATION
 from .helpers import classproperty
 
 E = typing.TypeVar("E", bound=Exception)
@@ -173,6 +175,9 @@ class ViewMigrationManager(abc.ABC):
         db = self.db
 
         if not (since := self.since):
+            return True
+
+        if os.environ[CURRENT_MIGRATION] == since:
             return True
 
         query = db.ewh_implemented_features.name == since
