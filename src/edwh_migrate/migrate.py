@@ -503,17 +503,6 @@ class ViewMigrationManager(abc.ABC):
         for item in self.instances:
             item.__exit__(exc_type, exc_value, traceback)
 
-    # @classmethod
-    # def combine(cls, *managers: typing.Self) -> typing.Self:
-    #     """
-    #     Combine multiple managers (with dependencies) into one manager, deduplicating these dependencies.
-    #     """
-    #     first_db = managers[0].db
-    #     assert all(_.db is first_db for _ in managers), "Can not combine managers which use different databases!"
-    #
-    #     return cls(first_db)
-
-
 @typing.overload
 def migration(
     func: None = None,
