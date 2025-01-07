@@ -46,7 +46,7 @@ class ViewMigrationManager(abc.ABC):
 
         ```python
         @migration
-        def upgrade_vnk_boards_to_user_org_gid_instead_of_org_tag_gid_20241023_001(db):
+        def upgrade_some_source_table_that_my_example_view_depends_on(db):
             with MyExampleView_V2(db):
                 db.executesql('''
                 -- Perform operations that might affect `my_example_view`
