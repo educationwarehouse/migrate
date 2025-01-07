@@ -30,6 +30,7 @@ import types
 import typing
 import urllib
 import urllib.parse
+import warnings
 from collections import OrderedDict
 from functools import wraps
 from pathlib import Path
@@ -394,9 +395,15 @@ class ViewMigrationManager(abc.ABC):
             regardless of whether an exception was raised.
     """
 
-    uses: typing.Iterable[typing.Type["ViewMigrationManager"]] = ()
+    @property
+    @classmethod
+    @abc.abstractmethod
+    def uses(cls) -> typing.Iterable[typing.Type["ViewMigrationManager"]]:
+        warnings.warn(f"Class {cls} has default 'uses'? This may indicate missing dependencies!")
+        return ()
+
     # note: manually setting `used_by` is deprecated!
-    used_by: list[typing.Type["ViewMigrationManager"]]
+    _used_by: list[typing.Type["ViewMigrationManager"]]
 
     def __init__(self, db: DAL):
         """
@@ -407,20 +414,23 @@ class ViewMigrationManager(abc.ABC):
         """
         self.db = db
 
-        used_by = getattr(self, "used_by", [])
+        used_by = getattr(self, "_used_by", [])
 
         assert self.__class__ not in used_by, "Recursion prevented..."
 
-        self.instances = [_(db) for _ in used_by]
+        self.instances = tuple(_(db) for _ in used_by)
 
     def __init_subclass__(cls) -> None:
         if not hasattr(cls, "used_by"):
             # note: this has to be created here,
             # otherwise 'used_by' is a shared reference between all subclasses!!!
-            cls.used_by = []
+            cls._used_by = []
 
-        for dependency_cls in cls.uses:
-            dependency_cls.used_by.append(cls)
+        # pycharm doesn't really understand abstract class properties so cast the type here:
+        dependencies = typing.cast(typing.Iterable[typing.Type["ViewMigrationManager"]], cls.uses)
+
+        for dependency_cls in dependencies:
+            dependency_cls._used_by.append(cls)
 
     @abc.abstractmethod
     def up(self) -> None:
@@ -461,6 +471,10 @@ class ViewMigrationManager(abc.ABC):
             exc_value (Exception): The exception instance raised during execution (if any).
             tb (traceback): The traceback object related to the exception (if any).
         """
+        if exc_type:
+            # block failed, don't try to go up!
+            return
+
         self.up()
 
         for item in self.instances:
@@ -954,7 +968,6 @@ def console_hook() -> None:  # pragma: no cover
     lockfile: '/flags/migrate-{os.environ["SCHEMA_VERSION"]}.complete'
     """
     _console_hook(sys.argv[1:])
-
 
 # ------------------------------------------------------------------------------------------------
 # ------------------------------------------------------------------------------------------------
