@@ -2,6 +2,16 @@
 
 <!--next-version-placeholder-->
 
+## v0.10.2 (2025-01-07)
+
+### Fix
+
+* 'since' should also include the currently active migration ([`60cec8f`](https://github.com/educationwarehouse/migrate/commit/60cec8f669792c6421de9afe0cbf2287a95f7ecc))
+
+### Documentation
+
+* Specify that 'until' exists ([`2bee9d9`](https://github.com/educationwarehouse/migrate/commit/2bee9d992b69142ab77a5840f3a55426042b91c5))
+
 ## v0.10.1 (2025-01-07)
 
 ### Fix
