@@ -4,17 +4,17 @@
 # SPDX-License-Identifier: MIT
 # type: ignore
 
-from edwh_migrate import migration, ViewMigrationManager
+from edwh_migrate import ViewMigrationManager, migration
 
 
 class ExampleDependency(ViewMigrationManager):
     # will also run used_by (= ExampleViewManager)
 
     def down(self):
-        print('2. this happens before before the migration', self.db._uri)
+        print("2. this happens before before the migration", self.db._uri)
 
     def up(self):
-        print('3. this happens after after the migration', self.db._uri)
+        print("3. this happens after after the migration", self.db._uri)
 
 
 class ExampleViewManager(ViewMigrationManager):
@@ -24,10 +24,10 @@ class ExampleViewManager(ViewMigrationManager):
     # only runs itself, not the dependency
 
     def down(self):
-        print('1. this happens before the migration', self.db._uri)
+        print("1. this happens before the migration", self.db._uri)
 
     def up(self):
-        print('4. this happens after the migration', self.db._uri)
+        print("4. this happens after the migration", self.db._uri)
 
 
 @migration

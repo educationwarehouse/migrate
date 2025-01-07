@@ -1,6 +1,7 @@
-from src.edwh_migrate import setup_db, migrate
-from src.edwh_migrate import ViewMigrationManager
+from src.edwh_migrate import ViewMigrationManager, migrate, setup_db
+
 from .fixtures import clean_migrate
+
 
 class MyBaseView(ViewMigrationManager):
     uses = ()
@@ -35,5 +36,5 @@ class MyChildView2(ViewMigrationManager):
 def test_resolving_manager_order(clean_migrate):
     db = setup_db(migrate=True, migrate_enabled=True)
 
-    with (MyChildView2(db), MyBaseView(db), MyChildView1(db)):
+    with MyChildView2(db), MyBaseView(db), MyChildView1(db):
         ...

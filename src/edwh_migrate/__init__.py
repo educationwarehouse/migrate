@@ -15,14 +15,12 @@ When writing new tasks, make sure:
    forget and fail...
 
 """
+
 from .migrate import (
     Config,
     InvalidConfigException,
     UnknownConfigException,
     ViewMigrationManager,
-)
-from .migrate import _console_hook as console_hook
-from .migrate import (
     activate_migrations,
     get_config,
     list_migrations,
@@ -32,6 +30,7 @@ from .migrate import (
     registered_functions,
     setup_db,
 )
+from .migrate import _console_hook as console_hook
 
 __all__ = [
     "registered_functions",

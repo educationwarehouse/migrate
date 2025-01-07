@@ -49,8 +49,7 @@ def test_migrate_from_toml(clean_migrate):
 
 
 def test_setup_db_custom_pydal_class(clean_migrate):
-    class DALish(DAL):
-        ...
+    class DALish(DAL): ...
 
     db = migrate.setup_db(dal_class=DALish)
 

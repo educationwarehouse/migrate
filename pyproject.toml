@@ -133,7 +133,9 @@ strict = true
 [tool.ruff]
 target-version = "py310"
 line-length = 120
+extend-exclude = ["*.bak/", "venv*/"]
 
+[tool.ruff.lint]
 select = [
     "F", # pyflake error
     "E", # pycodestyle error
@@ -152,7 +154,6 @@ unfixable = [
     # Don't touch unused imports
     "F401",
 ]
-extend-exclude = ["*.bak/", "venv*/"]
 
 ignore = [
     "RUF013", # implicit Optional
@@ -169,10 +170,10 @@ skips = [
 profile = "black"
 extend_skip_glob = ["*.bak/*"]
 
-[tool.ruff.flake8-tidy-imports]
+[tool.ruff.lint.flake8-tidy-imports]
 ban-relative-imports = "all"
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 # Tests can use magic values, assertions, and relative imports
 "tests/**/*" = ["PLR2004", "S101", "TID252"]
 

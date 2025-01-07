@@ -2,8 +2,6 @@ import shutil
 import tempfile
 from pathlib import Path
 
-from src.edwh_migrate.postgres import PostgresUndefinedTable
-
 import pytest
 from configuraptor import Singleton
 from pydal import DAL
@@ -15,6 +13,7 @@ from src.edwh_migrate import (
     migrate,
     recover_database_from_backup,
 )
+from src.edwh_migrate.postgres import PostgresUndefinedTable
 
 
 def rmdir(path: Path):
