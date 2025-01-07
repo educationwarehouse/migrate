@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.9.9 (2025-01-07)
+
+### Performance
+
+* Remove duplicate `import_migrations` call ([`a5fed03`](https://github.com/educationwarehouse/migrate/commit/a5fed03be66848ad7c5d556b3387c271143a86c1))
+
 ## v0.9.8 (2025-01-07)
 
 ### Fix
