@@ -2,6 +2,10 @@
 
 <!--next-version-placeholder-->
 
+## v0.9.7 (2025-01-07)
+
+
+
 ## v0.9.7-beta.1 (2025-01-07)
 
 ### Fix
