@@ -2,6 +2,13 @@
 
 <!--next-version-placeholder-->
 
+## v0.10.3 (2025-01-09)
+
+### Fix
+
+* **cli:** Use proper exit code if a migration failed ([`3846c65`](https://github.com/educationwarehouse/migrate/commit/3846c6545a05558e7dd4f175187845398a4f9dae))
+* **test:** Pass current config to `schema_versioned_lock_file` ([`e82f68a`](https://github.com/educationwarehouse/migrate/commit/e82f68af4a89c82d44ea5b43655cf58291329dea))
+
 ## v0.10.2 (2025-01-07)
 
 ### Fix
