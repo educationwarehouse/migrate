@@ -787,6 +787,9 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
     if "-l" in args or "--list" in args:
         print_migrations_status_table(config)
         exit(0)
+
+    success = False
+
     # get the versioned lock file path, as the config performs the environment variable expansion
     with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
         if not import_migrations(args, config):
@@ -800,6 +803,12 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
             raise MigrationFailed("Not every migration succeeded.")
 
         print("migration completed successfully, marking success.")
+        success = True
+
+    exit(
+        # with exit code:
+        0 if success else 1
+    )
 
 
 def console_hook() -> None:  # pragma: no cover
