@@ -229,16 +229,17 @@ def test_schema_versioned_lock_file(capsys, clean_migrate):
 
     config.schema_version = None
 
-    with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=True) as lock:
-        assert lock is None
+    with schema_versioned_lock_file(config=config, flag_location=flag_dir, create_flag_location=True) as lock:
+        assert config.schema_version is None, "Schema version should be none"
+        assert lock is None, "expected no lock due to empty schema version"
 
     config.schema_version = "1"
 
-    with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=True) as lock:
+    with schema_versioned_lock_file(config=config, flag_location=flag_dir, create_flag_location=True) as lock:
         assert lock
 
     with pytest.raises(MigrateLockExists):
-        with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=False) as lock:
+        with schema_versioned_lock_file(config=config, flag_location=flag_dir, create_flag_location=False) as lock:
             pass
 
     # config.schema_version = "2"
@@ -247,7 +248,7 @@ def test_schema_versioned_lock_file(capsys, clean_migrate):
 
     assert config.schema_version == "2"
 
-    with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=False) as lock:
+    with schema_versioned_lock_file(config=config, flag_location=flag_dir, create_flag_location=False) as lock:
         raise MigrationFailed()
 
     captured = capsys.readouterr()
@@ -255,7 +256,7 @@ def test_schema_versioned_lock_file(capsys, clean_migrate):
     assert "removing the lock file" in captured.out
 
     with pytest.raises(Exception):
-        with schema_versioned_lock_file(flag_location=flag_dir, create_flag_location=False) as lock:
+        with schema_versioned_lock_file(config=config, flag_location=flag_dir, create_flag_location=False) as lock:
             raise Exception()
 
     captured = capsys.readouterr()
