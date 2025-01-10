@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v0.10.4 (2025-01-10)
+
+### Fix
+
+* Exit code should be 0 if lock file already exists. also, make `_console_hook` only return the exit code so it can be used internally elsewhere; make `console_hook` actually exit ([`16388b0`](https://github.com/educationwarehouse/migrate/commit/16388b063b5ce196f4bae3cabafc45917deb690d))
+
 ## v0.10.3 (2025-01-09)
 
 ### Fix
