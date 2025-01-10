@@ -28,6 +28,7 @@ import traceback
 import typing
 import urllib
 import urllib.parse
+import warnings
 from collections import OrderedDict
 from functools import wraps
 from pathlib import Path
@@ -763,7 +764,7 @@ def print_migrations_status_table(config: Config) -> None:
     print(tabulate(table, headers=["Migration Name", "Status", "Last Updated"]))
 
 
-def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # pragma: no cover
+def _console_hook(args: list[str], config: Optional[Config] = None) -> int:  # pragma: no cover
     if "-h" in args or "--help" in args:
         print(
             """
@@ -782,33 +783,37 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> None:  # 
 
         """
         )
-        exit(0)
+        return 0
     config = config or get_config()
     if "-l" in args or "--list" in args:
         print_migrations_status_table(config)
-        exit(0)
+        return 0
 
     success = False
+    try:
+        # get the versioned lock file path, as the config performs the environment variable expansion
+        with schema_versioned_lock_file(config=config):
+            if not import_migrations(args, config):
+                # nothing to do, exit with error:
+                return 1
 
-    # get the versioned lock file path, as the config performs the environment variable expansion
-    with contextlib.suppress(MigrateLockExists), schema_versioned_lock_file(config=config):
-        if not import_migrations(args, config):
-            # nothing to do, exit with error:
-            exit(1)
+            print("starting migrate hook")
+            print(f"{len(registered_functions)} migrations discovered")
 
-        print("starting migrate hook")
-        print(f"{len(registered_functions)} migrations discovered")
+            if not activate_migrations(config):
+                raise MigrationFailed("Not every migration succeeded.")
 
-        if not activate_migrations(config):
-            raise MigrationFailed("Not every migration succeeded.")
-
-        print("migration completed successfully, marking success.")
+            print("migration completed successfully, marking success.")
+            success = True
+    except MigrateLockExists:
+        # that's okay, should still have exit code 0
         success = True
+    except BaseException as e:
+        warnings.warn(str(e), category=RuntimeWarning, source=e)
+        success = False
 
-    exit(
-        # with exit code:
-        0 if success else 1
-    )
+    # with exit code:
+    return 0 if success else 1
 
 
 def console_hook() -> None:  # pragma: no cover
@@ -817,7 +822,7 @@ def console_hook() -> None:  # pragma: no cover
 
     lockfile: '/flags/migrate-{os.environ["SCHEMA_VERSION"]}.complete'
     """
-    _console_hook(sys.argv[1:])
+    exit(_console_hook(sys.argv[1:]))
 
 
 # ------------------------------------------------------------------------------------------------

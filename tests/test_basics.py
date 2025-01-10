@@ -106,9 +106,9 @@ def test_dummy_is_not_migrated_twice(tmp_just_implemented_features_sqlite_db_fil
     result = migrate.activate_migrations()
     assert result is True, "the dummy returning True should have been marked as successful"
     result = migrate.activate_migrations()
-    assert (
-        "already installed." in capsys.readouterr().out
-    ), "the dummy returning True should have been marked as successful"
+    assert "already installed." in capsys.readouterr().out, (
+        "the dummy returning True should have been marked as successful"
+    )
     db = migrate.setup_db()
     # dump_db(db, echo=True)
     assert db(db.ewh_implemented_features).count() == 1, "exactly one row should be in the table"
@@ -161,9 +161,9 @@ def test_dependency_failure(clean_migrate, tmp_just_implemented_features_sqlite_
     db = migrate.setup_db()
     dump_db(db, echo=True)
     assert db(db.ewh_implemented_features.installed == True).count() == 0, "requirement failed, no succes possible"
-    assert (
-        db(db.ewh_implemented_features.installed == False).count() == 1
-    ), "because of the exception, `dependent` is never written to the database. "
+    assert db(db.ewh_implemented_features.installed == False).count() == 1, (
+        "because of the exception, `dependent` is never written to the database. "
+    )
 
 
 def test_recover_database_from_backup(tmp_just_implemented_features_sqlite_sql_file, tmp_empty_sqlite_db_file):
