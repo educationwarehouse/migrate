@@ -1,4 +1,3 @@
-import abc
 import typing
 
 T = typing.TypeVar("T")

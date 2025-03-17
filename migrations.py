@@ -3,8 +3,12 @@
 #
 # SPDX-License-Identifier: MIT
 # type: ignore
+import os
 
 from edwh_migrate import ViewMigrationManager, migration
+
+if os.environ.get("PYTEST_CURRENT_TEST"):
+    raise EnvironmentError("This file is not supposed to be executed by pytest!")
 
 
 class ExampleDependency(ViewMigrationManager):
