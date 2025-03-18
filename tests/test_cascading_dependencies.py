@@ -40,7 +40,7 @@ def test_cascading_order(tmp_empty_sqlite_db_file, clean_migrate):
     def a2(db):
         return True
 
-    @migration(requires=[c4, c6])
+    @migration(requires=[c4, "c6"])
     def a3(db):
         return True
 

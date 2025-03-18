@@ -30,7 +30,7 @@ import urllib
 import urllib.parse
 import warnings
 from collections import OrderedDict
-from functools import wraps
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
@@ -52,7 +52,54 @@ try:
 except ImportError:  # pragma: no cover
     TypeDAL = DAL
 
-Migration: typing.TypeAlias = typing.Callable[[DAL], bool]
+MigrationFn: typing.TypeAlias = typing.Callable[[DAL], bool]
+
+
+@dataclass
+class Migration:
+    """
+    Holds the inner function and list of requirements.
+
+    Proxies __call__ and __name__ to original function.
+    """
+
+    body: MigrationFn
+    requires: list[str]
+
+    def check_requires(self, db: DAL) -> None:
+        """
+        Check if the required migrations before this one completed succesfully.
+
+        Raises:
+            RequimentsNotMet
+        """
+        # check requirements
+        if not self.requires:
+            return
+
+        installed = {
+            _.name: _.installed for _ in db(db.ewh_implemented_features.name.belongs(self.requires)).iterselect()
+        }
+
+        # latest = db(db.ewh_implemented_features).select(orderby=~db.ewh_implemented_features.id).first()
+        # print(
+        #     f"debug: {installed = }; {self.requires = }; {latest = }"
+        # )
+
+        # check if all requirements are in the list of installed features
+        if len(installed) < len(self.requires) or not all(installed.values()):
+            db.close()
+
+            missing = set(self.requires) - set(installed.keys())
+            print(self.__name__, f"REQUIREMENTS NOT MET ({missing = })")
+            raise RequimentsNotMet("requirements not met")
+
+    @property
+    def __name__(self) -> str:
+        return self.body.__name__
+
+    def __call__(self, db: DAL) -> bool:
+        return self.body(db)
 
 
 class MigrationStore(Singleton):
@@ -61,19 +108,19 @@ class MigrationStore(Singleton):
     """
 
     _order: list[str]
-    _functions: list[Migration]
+    _migrations: list[Migration]
     _names: set[str]
 
     def __init__(self) -> None:
         self._order = []
-        self._functions = []
+        self._migrations = []
         # ^ can be zipped together
         self._names = set()
 
     def has(self, name: str) -> bool:
         return name in self._names
 
-    def register_ordered(self, fn: Migration, requires: typing.Iterable[str] = ()) -> Migration:
+    def register_ordered(self, fn: MigrationFn, requires: typing.Iterable[str] = ()) -> Migration:
         """Register a migration function with ordering and dependencies.
 
         Order migrations to ensure they are run in the correct sequence,
@@ -116,11 +163,13 @@ class MigrationStore(Singleton):
         else:
             rank = len(migrations)
 
+        instance = Migration(fn, requires=list(requires))
+
         self._order.insert(rank, fn_name)
-        self._functions.insert(rank, fn)
+        self._migrations.insert(rank, instance)
         self._names.add(fn_name)
 
-        return fn
+        return instance
 
     def list(self) -> OrderedDict[str, Migration]:
         """
@@ -138,12 +187,12 @@ class MigrationStore(Singleton):
         # return iter(self.list().items())
         return zip(
             self._order,
-            self._functions,
+            self._migrations,
         )
 
     def reset(self) -> None:
         self._order.clear()
-        self._functions.clear()
+        self._migrations.clear()
         self._names.clear()
 
     def __len__(self) -> int:
@@ -419,8 +468,8 @@ def setup_db(
 @typing.overload
 def migration(
     func: None = None,
-    requires: list[Migration | str] | Migration | None = None,
-) -> typing.Callable[[Migration], Migration]:
+    requires: list[MigrationFn | str] | MigrationFn | None = None,
+) -> typing.Callable[[MigrationFn], Migration]:
     """
     Allows calling the decorator with parentheses.
 
@@ -432,8 +481,8 @@ def migration(
 
 @typing.overload
 def migration(
-    func: Migration,
-    requires: list[Migration | str] | Migration | None = None,
+    func: MigrationFn,
+    requires: list[MigrationFn | str] | MigrationFn | None = None,
 ) -> Migration:
     """
     Allows calling @migration without parens.
@@ -441,9 +490,9 @@ def migration(
 
 
 def migration(
-    func: Migration | None = None,
-    requires: list[Migration | str] | Migration | None = None,
-) -> Migration | typing.Callable[[Migration], Migration]:
+    func: MigrationFn | None = None,
+    requires: list[MigrationFn | str] | MigrationFn | None = None,
+) -> Migration | typing.Callable[[MigrationFn], Migration]:
     """
     Decorator to register a function as a migration function.
 
@@ -456,46 +505,31 @@ def migration(
             db.executesql("select 1")
             return True # or False, if the migration failed. On true db.commit() will be performed.
     """
+    # note: `requires`-checking moved to `activate_migrations` and Migration.check_requires so it has access to a long-living database.
+    #  otherwise, `ewh_implemented_features` may not be up-to-date.
     if func is None and requires:
         # requires is given, so return the decorator that will test if the requirements are met before
         # executing the decorated function, when it's time to really execute the function.
 
-        if callable(requires):  # noqa: SIM108
+        if isinstance(requires, str):
+            required_names = [requires]
+        elif callable(requires):  # noqa: SIM108
             # when a single requirement is given, and it is a function, take the name of the function
-            required_names = [requires if isinstance(requires, str) else requires.__name__]
+            required_names = [requires.__name__]
         else:
             # if requires is not callable, then it must be a list of functions, so take the names of those functions.
             required_names = [_ if isinstance(_, str) else _.__name__ for _ in requires]
 
-        def decorator(decorated: Migration) -> Migration:
-            @wraps(decorated)
-            def with_requires(*p: typing.Any, **kwp: typing.Any) -> bool:
-                # check requirements
-                db = setup_db()
-                installed = (
-                    db(
-                        db.ewh_implemented_features.name.belongs(required_names)
-                        & (db.ewh_implemented_features.installed == True)
-                    )
-                    .select("installed")
-                    .column("installed")
-                )
-
-                # check if all requirements are in the list of installed features
-                if len(installed) != len(required_names) or not all(installed):
-                    db.close()
-                    print(decorated.__name__, "REQUIREMENTS NOT MET")
-                    raise RequimentsNotMet("requirements not met")
-
-                return decorated(*p, **kwp)
-
-            return migrations.register_ordered(with_requires, required_names)
+        def decorator(decorated: MigrationFn) -> Migration:
+            return migrations.register_ordered(decorated, required_names)
 
         return decorator
 
     if func:
+        # @migration without ()
         return migrations.register_ordered(func)
 
+    # @migration() without `requires`
     return migration
 
 
@@ -507,8 +541,7 @@ def should_run(db: DAL, name: str) -> bool:
     :param name: name of the migration function
     :return: whether the migration function should be run (if not installed) or not (when installed).
     """
-    resultset = db(db.ewh_implemented_features.name == name).select()
-    row = resultset.first() if resultset else None
+    row = db(db.ewh_implemented_features.name == name).select().first()
     return row.installed is False if row else True
 
 
@@ -652,13 +685,12 @@ def mark_migration(db: DAL, name: str, installed: bool) -> int | None:
     """
     Store the result of a migration in the implemented_features table.
     """
-    new_id = db.ewh_implemented_features.update_or_insert(
+    return db.ewh_implemented_features.update_or_insert(
         db.ewh_implemented_features.name == name,
         name=name,
         installed=installed,
         last_update_dttm=datetime.datetime.now(),
-    )  # type: int | None
-    return new_id
+    )
 
 
 def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MINUTES) -> bool:
@@ -672,11 +704,17 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
         raise ValueError("No db could be set up!")
 
     successes = []
+    # for some reason `ewh_implemented_features` doesn't always see the latest rows?
+    # cheating and using a set of 'installed' also doesn't work because that leads to the same problem in different places.
 
     # perform migrations
-    for name, function in migrations:
+    for name, migration in migrations:
         print("test:", name)
+
         if should_run(db, name):
+            # with global db instead of function-specific one so implemented_features is always up-to-date:
+            migration.check_requires(db)
+
             print("run: ", name)
             # black magic fuckery via env
             # but ewh_implemented doesn't really support adding new columns
@@ -688,31 +726,31 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
             # because there could be tables being defined,
             # and we want all the functions to be siloed and not
             # have database schema dependencies and collisions.
-            db_for_this_function = setup_db()
+            db_for_this_function = setup_db(appname=f"edwh-migrate-{name}")
             try:
-                result = function(db_for_this_function)
+                result = migration(db_for_this_function)
                 successes.append(result)
             except Exception:
+                function = migration.body
                 print(f"failed: {name} in {inspect.getfile(function)}:{inspect.getsourcelines(function)[1]}")
                 print(traceback.format_exc(), file=sys.stderr)
+                db_for_this_function.close()
                 return False
 
             if result:
                 # commit the change to db
                 db_for_this_function.commit()
-                # close this specific cursor, it's not used any longer.
-                db_for_this_function.close()
-                print("ran: ", name, "successfully. ")
-                # alleen bij success opslaan dat er de feature beschikbaar is
-                mark_migration(db, name, installed=True)
+                print("ran: ", name, "successfully.")
             else:
-                print("ran: ", name, " and failed. ")
-                successes.append(False)
                 # try a rollback, because we should ignore whatever happend
                 db_for_this_function.rollback()
-                # and close because this connection is not used any longer.
-                db_for_this_function.close()
-                mark_migration(db, name, installed=False)
+                print("ran: ", name, " and failed.")
+
+            # and close because this connection is not used any longer.
+            db_for_this_function.close()
+
+            # after actual commit/rollback - also write status (global db):
+            mark_migration(db, name, installed=result)
             db.commit()
         else:
             print("already installed. ")
