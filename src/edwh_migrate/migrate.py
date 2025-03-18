@@ -64,16 +64,16 @@ class MigrationStore(Singleton):
     _functions: list[Migration]
     _names: set[str]
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._order = []
         self._functions = []
         # ^ can be zipped together
         self._names = set()
 
-    def has(self, name: str):
+    def has(self, name: str) -> bool:
         return name in self._names
 
-    def register_ordered(self, fn: Migration, requires: list[str] = ()) -> Migration:
+    def register_ordered(self, fn: Migration, requires: typing.Iterable[str] = ()) -> Migration:
         """Register a migration function with ordering and dependencies.
 
         Order migrations to ensure they are run in the correct sequence,
@@ -122,7 +122,7 @@ class MigrationStore(Singleton):
 
         return fn
 
-    def list(self):
+    def list(self) -> OrderedDict[str, Migration]:
         """
         Helper function to list all @registered migrations.
 
@@ -130,7 +130,7 @@ class MigrationStore(Singleton):
         """
         return OrderedDict(iter(self))
 
-    def __iter__(self):
+    def __iter__(self) -> typing.Iterator[tuple[str, Migration]]:
         """
         Usage:
             `for name, function in migrations:`
@@ -141,15 +141,15 @@ class MigrationStore(Singleton):
             self._functions,
         )
 
-    def reset(self):
+    def reset(self) -> None:
         self._order.clear()
         self._functions.clear()
         self._names.clear()
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self._order)
 
-    def __bool__(self):
+    def __bool__(self) -> bool:
         return any(self._order)
 
 
@@ -419,7 +419,7 @@ def setup_db(
 @typing.overload
 def migration(
     func: None = None,
-    requires: list[Migration] | Migration | None = None,
+    requires: list[Migration | str] | Migration | None = None,
 ) -> typing.Callable[[Migration], Migration]:
     """
     Allows calling the decorator with parentheses.
@@ -433,7 +433,7 @@ def migration(
 @typing.overload
 def migration(
     func: Migration,
-    requires: list[Migration] | Migration | None = None,
+    requires: list[Migration | str] | Migration | None = None,
 ) -> Migration:
     """
     Allows calling @migration without parens.
@@ -442,7 +442,7 @@ def migration(
 
 def migration(
     func: Migration | None = None,
-    requires: list[Migration] | Migration | None = None,
+    requires: list[Migration | str] | Migration | None = None,
 ) -> Migration | typing.Callable[[Migration], Migration]:
     """
     Decorator to register a function as a migration function.
@@ -782,7 +782,7 @@ def schema_versioned_lock_file(
                 raise
 
 
-def temporary_import(name: str):
+def temporary_import(name: str) -> None:
     """
     Prevent caching of module (relevant in pytest)
     """
