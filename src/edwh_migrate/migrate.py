@@ -754,6 +754,7 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
             db.commit()
         else:
             print("already installed. ")
+            successes.append(True)
 
     db.close()
 
