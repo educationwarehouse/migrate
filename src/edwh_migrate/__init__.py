@@ -34,7 +34,7 @@ from .migrate import (
 from .migrate import _console_hook as console_hook
 from .view_migration_manager import ViewMigrationManager
 
-__all__ = [
+__all__ = [  # noqa: RUF022
     "migration",
     # registered_functions is deprecated in favor of
     "migrations",

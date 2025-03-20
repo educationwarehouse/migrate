@@ -81,11 +81,6 @@ class Migration:
             _.name: _.installed for _ in db(db.ewh_implemented_features.name.belongs(self.requires)).iterselect()
         }
 
-        # latest = db(db.ewh_implemented_features).select(orderby=~db.ewh_implemented_features.id).first()
-        # print(
-        #     f"debug: {installed = }; {self.requires = }; {latest = }"
-        # )
-
         # check if all requirements are in the list of installed features
         if len(installed) < len(self.requires) or not all(installed.values()):
             db.close()
@@ -505,7 +500,8 @@ def migration(
             db.executesql("select 1")
             return True # or False, if the migration failed. On true db.commit() will be performed.
     """
-    # note: `requires`-checking moved to `activate_migrations` and Migration.check_requires so it has access to a long-living database.
+    # note: `requires`-checking moved to `activate_migrations` and Migration.check_requires
+    #  so it has access to a long-living database.
     #  otherwise, `ewh_implemented_features` may not be up-to-date.
     if func is None and requires:
         # requires is given, so return the decorator that will test if the requirements are met before
@@ -513,7 +509,7 @@ def migration(
 
         if isinstance(requires, str):
             required_names = [requires]
-        elif callable(requires):  # noqa: SIM108
+        elif callable(requires):
             # when a single requirement is given, and it is a function, take the name of the function
             required_names = [requires.__name__]
         else:
@@ -704,8 +700,6 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
         raise ValueError("No db could be set up!")
 
     successes = []
-    # for some reason `ewh_implemented_features` doesn't always see the latest rows?
-    # cheating and using a set of 'installed' also doesn't work because that leads to the same problem in different places.
 
     # perform migrations
     for name, migration in migrations:
