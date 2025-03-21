@@ -120,7 +120,7 @@ class ViewMigrationManager(abc.ABC):
 
     may_go_up = False
 
-    def __init__(self, db: DAL, cache: dict = None):
+    def __init__(self, db: DAL, cache: typing.Optional[dict] = None):
         """
         Initialize the ViewMigrationManager with a database connection.
 

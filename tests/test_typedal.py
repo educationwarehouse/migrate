@@ -46,4 +46,5 @@ def test_setup_empty(tmp_typedal_env, clean_migrate):
 
 
 def test_activate_migrations(env_use_typedal, tmp_typedal_env, clean_migrate):
-    assert activate_migrations()
+    # no migrations -> return false
+    assert activate_migrations() is False

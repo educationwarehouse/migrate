@@ -37,7 +37,7 @@ def test_redis_cleared(tmp_just_implemented_features_sqlite_db_file: Path, redis
     assert redis_client.get("a")
     assert not redis_client.get("b")
 
-    assert activate_migrations(config)
+    activate_migrations(config)
 
     assert not redis_client.get("a")
     assert not redis_client.get("b")
@@ -56,7 +56,7 @@ def test_valkey_cleared(tmp_just_implemented_features_sqlite_db_file: Path, valk
     assert redis_client.get("a")
     assert not redis_client.get("b")
 
-    assert activate_migrations(config)
+    activate_migrations(config)
 
     assert not redis_client.get("a")
     assert not redis_client.get("b")

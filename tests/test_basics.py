@@ -13,6 +13,7 @@ from src.edwh_migrate.migrate import (
     MigrateLockExists,
     MigrationFailed,
     get_config,
+    print_migrations_status_table,
     schema_versioned_lock_file,
 )
 
@@ -61,16 +62,16 @@ def test_apply_empty_run_to_empty_sqlite(tmp_empty_sqlite_db_file, clean_migrate
         migrate.setup_db()
 
 
-def test_starts_without_registered_migrations():
-    assert len(migrate.registered_functions) == 0, "No migrations should be registered"
+def test_starts_without_registered_migrations(clean_migrate):
+    assert len(migrate.migrations) == 0, "No migrations should be registered"
 
 
-def test_registration_works():
+def test_registration_works(clean_migrate):
     @migrate.migration
     def dummy(db):
         return True
 
-    assert len(migrate.registered_functions) == 1, "only one function should be registered"
+    assert len(migrate.migrations) == 1, "only one function should be registered"
 
 
 def dump_db(db: pydal.DAL, *, echo=False):
@@ -80,12 +81,12 @@ def dump_db(db: pydal.DAL, *, echo=False):
     return output
 
 
-def test_always_true_dummy_is_migrated(tmp_just_implemented_features_sqlite_db_file):
+def test_always_true_dummy_is_migrated(clean_migrate, tmp_just_implemented_features_sqlite_db_file):
     @migrate.migration()
     def dummy(db):
         return True
 
-    assert len(migrate.registered_functions) == 1, "exactly one function should be registerend"
+    assert len(migrate.migrations) == 1, "exactly one function should be registerend"
     result = migrate.activate_migrations()
     assert result is True, "the dummy returning True should have been marked as successful"
     db = migrate.setup_db()
@@ -97,12 +98,12 @@ def test_always_true_dummy_is_migrated(tmp_just_implemented_features_sqlite_db_f
     assert rs.first().installed is True, "the row should be marked as installed in the database"
 
 
-def test_dummy_is_not_migrated_twice(tmp_just_implemented_features_sqlite_db_file, capsys):
+def test_dummy_is_not_migrated_twice(clean_migrate, tmp_just_implemented_features_sqlite_db_file, capsys):
     @migrate.migration
     def dummy(db):
         return True
 
-    assert len(migrate.registered_functions) == 1, "exactly one function should be registerend"
+    assert len(migrate.migrations) == 1, "exactly one function should be registerend"
     result = migrate.activate_migrations()
     assert result is True, "the dummy returning True should have been marked as successful"
     result = migrate.activate_migrations()
@@ -124,8 +125,7 @@ def test_dependencies(clean_migrate, tmp_just_implemented_features_sqlite_db_fil
     def required(db):
         return True
 
-    print(migrate.registered_functions)
-    assert len(migrate.registered_functions) == 1
+    assert len(migrate.migrations) == 1
     result = migrate.activate_migrations()
     assert result is True, "the required migration returning True should have been marked as successful"
 
@@ -133,7 +133,7 @@ def test_dependencies(clean_migrate, tmp_just_implemented_features_sqlite_db_fil
     def dependent(db):
         return True
 
-    assert len(migrate.registered_functions) == 2
+    assert len(migrate.migrations) == 2
     result = migrate.activate_migrations()
     assert result is True
 
@@ -153,7 +153,7 @@ def test_dependency_failure(clean_migrate, tmp_just_implemented_features_sqlite_
     def dependent(db):
         return True
 
-    assert len(migrate.registered_functions) == 2
+    assert len(migrate.migrations) == 2
 
     with pytest.raises(migrate.RequimentsNotMet):
         migrate.activate_migrations()
@@ -287,3 +287,23 @@ def test_without_migrate_uri_but_with_db_uri_and_folder(fixture_temp_chdir, clea
     finally:
         del os.environ["DB_URI"]
         del os.environ["DB_FOLDER"]
+
+
+def test_migration_failure_traceback(tmp_empty_sqlite_db_file, clean_migrate, capsys):
+    config = migrate.get_config()
+
+    @migrate.migration()
+    def fails_horribly(db):
+        0 / 0
+
+    assert migrate.activate_migrations(config) is False
+    captured = capsys.readouterr()
+    assert "failed" in captured.out
+    assert "ZeroDivisionError" in captured.err
+
+    print_migrations_status_table(config)
+    captured = capsys.readouterr()
+    stdout = captured.out
+    assert "fails_horribly" in stdout
+    assert "missing" in stdout
+    assert "function test_migration_failure_traceback.<locals>.fails" not in stdout

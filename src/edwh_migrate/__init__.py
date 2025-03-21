@@ -26,16 +26,18 @@ from .migrate import (
     list_migrations,
     mark_migration,
     migration,
+    # registered_functions is deprecated in favor of
+    migrations,
     recover_database_from_backup,
-    registered_functions,
     setup_db,
 )
 from .migrate import _console_hook as console_hook
 from .view_migration_manager import ViewMigrationManager
 
-__all__ = [
-    "registered_functions",
+__all__ = [  # noqa: RUF022
     "migration",
+    # registered_functions is deprecated in favor of
+    "migrations",
     "activate_migrations",
     "setup_db",
     "recover_database_from_backup",

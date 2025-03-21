@@ -12,7 +12,7 @@ from src.edwh_migrate import migrate
 
 @pytest.fixture
 def clean_migrate():
-    migrate.registered_functions = {}
+    migrate.migrations.reset()
     Singleton.clear()  # clean cached Config
 
 
@@ -39,9 +39,11 @@ def tmp_empty_sqlite_db_file(tmp_sqlite_folder, sqlite_empty):
     dst = tmp_sqlite_folder / "empty_sqlite.db"
     shutil.copy(sqlite_empty / "sqlite_empty" / "empty_sqlite.db", dst)
     os.environ["MIGRATE_URI"] = f"sqlite://{str(dst)}"
+    os.environ["DB_FOLDER"] = str(tmp_sqlite_folder)
     yield dst
-    dst.unlink(missing_ok=True)
     del os.environ["MIGRATE_URI"]
+    del os.environ["DB_FOLDER"]
+    dst.unlink(missing_ok=True)
 
 
 @pytest.fixture
@@ -55,8 +57,8 @@ def tmp_just_implemented_features_sqlite_db_file(tmp_sqlite_folder, sqlite_empty
     shutil.copy(sqlite_empty / "sqlite_empty" / "just_implemented_features.db", dst)
     os.environ["MIGRATE_URI"] = f"sqlite://{str(dst)}"
     yield dst
-    dst.unlink(missing_ok=True)
     del os.environ["MIGRATE_URI"]
+    dst.unlink(missing_ok=True)
 
 
 @pytest.fixture()

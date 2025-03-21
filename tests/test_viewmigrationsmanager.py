@@ -1,3 +1,4 @@
+import os
 from sqlite3 import OperationalError
 
 import pytest
@@ -12,6 +13,7 @@ from .fixtures import clean_migrate, sqlite_empty, tmp_empty_sqlite_db_file, tmp
 
 class StandaloneView(ViewMigrationManager):
     since = "first_migration"
+    until = "third_migration"  # doesn't exist
 
     def up(self): ...
 
@@ -86,7 +88,7 @@ def test_resolving_manager_order(tmp_empty_sqlite_db_file, clean_migrate):
 
     config = migrate.get_config()
 
-    assert len(migrate.registered_functions) == 1
+    assert len(migrate.migrations) == 1
     assert migrate.activate_migrations(config=config)
 
     db = migrate.setup_db(config=config)

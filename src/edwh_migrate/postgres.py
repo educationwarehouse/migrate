@@ -6,7 +6,7 @@ try:
 
     PostgresUndefinedTable = psycopg2.errors.UndefinedTable
 
-except ImportError:
+except ImportError:  # pragma: no cover
     """
     Create fallback exceptions for when psycopg2 is not installed (e.g. when using `migrate` with sqlite only).
     """
