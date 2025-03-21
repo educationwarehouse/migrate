@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v1.0.0 (2025-03-21)
+
+### Feature
+
+* BREAKING CHANGE | improved cascading dependencies ([#5](https://github.com/educationwarehouse/migrate/issues/5)) ([`3369dcd`](https://github.com/educationwarehouse/migrate/commit/3369dcdbd42be37c330678ae6a8168864a48c30e))
+
 ## v0.10.4 (2025-01-10)
 
 ### Fix
