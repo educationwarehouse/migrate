@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v1.0.2 (2025-04-10)
+
+### Fix
+
+* Ensure 'installed' is a boolean / count None as False ([`2005649`](https://github.com/educationwarehouse/migrate/commit/20056497a000dd675d118dbe6669274072f84e1a))
+
 ## v1.0.1 (2025-04-10)
 
 ### Fix
