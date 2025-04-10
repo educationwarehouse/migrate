@@ -539,7 +539,7 @@ def should_run(db: DAL, name: str) -> bool:
     :return: whether the migration function should be run (if not installed) or not (when installed).
     """
     row = db(db.ewh_implemented_features.name == name).select().first()
-    return row.installed is False if row else True
+    return not row.installed if row else True
 
 
 def recover_database_from_backup(set_schema: Optional[str | bool] = None, config: Optional[Config] = None) -> None:
@@ -685,7 +685,7 @@ def mark_migration(db: DAL, name: str, installed: bool) -> int | None:
     return db.ewh_implemented_features.update_or_insert(
         db.ewh_implemented_features.name == name,
         name=name,
-        installed=installed,
+        installed=bool(installed),
         last_update_dttm=datetime.datetime.now(),
     )
 
