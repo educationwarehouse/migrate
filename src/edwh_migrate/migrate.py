@@ -85,7 +85,8 @@ class Migration:
         if len(installed) < len(self.requires) or not all(installed.values()):
             db.close()
 
-            missing = set(self.requires) - set(installed.keys())
+            # missing = required - done
+            missing = set(self.requires) - set(key for key, value in installed.items() if value)
             print(self.__name__, f"REQUIREMENTS NOT MET ({missing = })")
             raise RequimentsNotMet("requirements not met")
 
