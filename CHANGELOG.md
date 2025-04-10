@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v1.0.1 (2025-04-10)
+
+### Fix
+
+* Properly list missing `requires` (keys in the database with value False weren't included in `missing` set) ([`01680b7`](https://github.com/educationwarehouse/migrate/commit/01680b75e460b5a59bd2ccb6e7600db4a33c09b8))
+
 ## v1.0.0 (2025-03-21)
 
 ### Feature
