@@ -4,6 +4,7 @@
 # SPDX-License-Identifier: MIT
 # type: ignore
 import os
+import time
 
 from edwh_migrate import ViewMigrationManager, migration
 
@@ -61,6 +62,7 @@ def feature_2(db):
 @migration(requires=feature_2)
 def feature_3(db):
     print("feature_3")
+    time.sleep(3)
     return True
 
 

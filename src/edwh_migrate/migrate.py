@@ -722,6 +722,8 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
             # and we want all the functions to be siloed and not
             # have database schema dependencies and collisions.
             db_for_this_function = setup_db(appname=f"edwh-migrate-{name}")
+
+            start_wall, start_cpu = time.perf_counter(), time.process_time()
             try:
                 result = migration(db_for_this_function)
                 successes.append(result)
@@ -732,14 +734,18 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
                 db_for_this_function.close()
                 return False
 
+            time_cpu = time.process_time() - start_cpu
+            time_wall = time.perf_counter() - start_wall
+            timings = f"({time_wall:.2f}s wall, {time_cpu:.2f}s CPU)"
+
             if result:
                 # commit the change to db
                 db_for_this_function.commit()
-                print("ran: ", name, "successfully.")
+                print("ran: ", name, "successfully", timings)
             else:
                 # try a rollback, because we should ignore whatever happend
                 db_for_this_function.rollback()
-                print("ran: ", name, " and failed.")
+                print("ran: ", name, "and failed", timings)
 
             # and close because this connection is not used any longer.
             db_for_this_function.close()
