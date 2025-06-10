@@ -2,6 +2,16 @@
 
 <!--next-version-placeholder-->
 
+## v1.1.0 (2025-06-10)
+
+### Feature
+
+* Include cpu and wall time in `ran:` print for each migration ([`fbfab29`](https://github.com/educationwarehouse/migrate/commit/fbfab2911f44c5860267dc3040797fef1cfb2059))
+
+### Fix
+
+* `create-flag-location` also ensures parent directories exist ([`d3ea64b`](https://github.com/educationwarehouse/migrate/commit/d3ea64ba3cc854fc28b6422c73aa88d5fe44a893))
+
 ## v1.0.2 (2025-04-10)
 
 ### Fix
