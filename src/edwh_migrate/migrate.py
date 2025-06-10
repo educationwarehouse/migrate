@@ -782,7 +782,7 @@ def schema_versioned_lock_file(
     flag_location = Path(flag_location or config.flag_location)
     if not flag_location.exists():
         if create_flag_location or config.create_flag_location:
-            flag_location.mkdir()
+            flag_location.mkdir(parents=True)
         else:
             raise NotADirectoryError(
                 f"Flag directory {flag_location} does not exist. "

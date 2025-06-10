@@ -44,9 +44,9 @@ def test_migrate_from_toml(clean_migrate):
     config = get_config()
     assert migrate.setup_db(migrate=True, migrate_enabled=True)
 
-    assert config.migrate_uri == "sqlite:///tmp/migrate_example.sqlite"
+    assert config.migrate_uri == "sqlite:///tmp/edwh-migrate/migrate_example.sqlite"
 
-    assert pathlib.Path("/tmp/migrate_example.sqlite").exists()
+    assert pathlib.Path("/tmp/edwh-migrate/migrate_example.sqlite").exists()
 
 
 def test_setup_db_custom_pydal_class(clean_migrate):
