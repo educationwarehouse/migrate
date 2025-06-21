@@ -26,6 +26,7 @@ pip install edwh-migrate[full]
 These variables can be set in the current environment or via `.env`:
 
 * `MIGRATE_URI` (required): regular `postgres://user:password@host:port/database` or `sqlite:///path/to/database` URI
+* `MIGRATIONS_FILE` (optional) path to a file containing migrations. By default, a file called `migrations.py` in the working directory is used.
 * `DATABASE_TO_RESTORE`: path to a (compressed) SQL file to restore. `.xz`,`.gz` and `.sql` are supported.
 * `MIGRATE_CAT_COMMAND`: for unsupported compression formats, this command decompresses the file and produces sql on the
   stdout.
