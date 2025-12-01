@@ -2,6 +2,16 @@
 
 <!--next-version-placeholder-->
 
+## v1.1.1 (2025-12-01)
+
+### Fix
+
+* Show proper (partial) traceback for import migration error ([`426e6b4`](https://github.com/educationwarehouse/migrate/commit/426e6b4d1c513677da19ffceb8f4150c67a7697e))
+
+### Documentation
+
+* Explained MIGRATIONS_FILE ([`fa1b221`](https://github.com/educationwarehouse/migrate/commit/fa1b2213e88a35d20a12396d62abe8a56832a09c))
+
 ## v1.1.0 (2025-06-10)
 
 ### Feature
