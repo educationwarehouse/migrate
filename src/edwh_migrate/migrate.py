@@ -915,6 +915,24 @@ def print_migrations_status_table(config: Config) -> None:  # pragma: no cover
     print(tabulate(table, headers=["Migration Name", "Status", "Last Updated"]))
 
 
+def print_trimmed_exception(error: BaseException):
+    tb_exc = traceback.TracebackException.from_exception(error)
+
+    last_bootstrap_index = -1
+
+    for index, frame in enumerate(tb_exc.stack):
+        filename = frame.filename or ""
+        if "importlib._bootstrap" in filename:
+            last_bootstrap_index = index
+
+    filtered = tb_exc.stack[last_bootstrap_index + 1 :]
+
+    tb_exc.stack = type(tb_exc.stack)(filtered)
+
+    for line in tb_exc.format():
+        print(line, end="")
+
+
 def _console_hook(args: list[str], config: Optional[Config] = None) -> int:  # pragma: no cover
     if "-h" in args or "--help" in args:
         print(
@@ -960,7 +978,10 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> int:  # p
         # that's okay, should still have exit code 0
         success = True
     except BaseException as e:
-        warnings.warn(str(e), category=RuntimeWarning, source=e)
+        warnings.warn(
+            "An error occured during migration import. See traceback below.", category=RuntimeWarning, source=e
+        )
+        print_trimmed_exception(e)
         success = False
 
     # with exit code:

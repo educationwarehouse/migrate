@@ -1,4 +1,3 @@
-import os
 from sqlite3 import OperationalError
 
 import pytest

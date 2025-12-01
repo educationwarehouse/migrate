@@ -1,4 +1,3 @@
-import os
 import tempfile
 import textwrap
 from contextlib import chdir
