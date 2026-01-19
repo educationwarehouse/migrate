@@ -38,8 +38,8 @@ def psql(request):
 
 @pytest.fixture(scope="function", autouse=True)
 def clean_db():
-    from sqlalchemy_utils.functions import create_database, drop_database
     from sqlalchemy import create_engine, text
+    from sqlalchemy_utils.functions import create_database, drop_database
 
     uri = postgres.get_connection_url()
 
