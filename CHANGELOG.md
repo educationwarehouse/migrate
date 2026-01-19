@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v1.1.2 (2026-01-19)
+
+### Fix
+
+* Set migrate=True only on `define_ewh_implemented_features`, so other tables are still blocked from migration ([`18189c8`](https://github.com/educationwarehouse/migrate/commit/18189c808ad973beb7dfcb1407687a64c1b73b0d))
+
 ## v1.1.1 (2025-12-01)
 
 ### Fix
