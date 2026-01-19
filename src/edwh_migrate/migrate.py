@@ -312,7 +312,7 @@ def get_config() -> Config:
 T_Dal = typing.TypeVar("T_Dal", bound=DAL)
 
 
-def define_ewh_implemented_features(db: DAL, rname: str = "ewh_implemented_features") -> Table:
+def define_ewh_implemented_features(db: DAL, rname: str = "ewh_implemented_features", migrate: bool = True) -> Table:
     """
     Define the required table.
 
@@ -330,6 +330,7 @@ def define_ewh_implemented_features(db: DAL, rname: str = "ewh_implemented_featu
         Field("installed", "boolean", default=False),
         Field("last_update_dttm", "datetime", default=datetime.datetime.now),
         rname=rname,
+        migrate=migrate,
     )
 
 
@@ -658,10 +659,10 @@ def try_setup_db(config: Optional[Config] = None, max_time: int = TEN_MINUTES) -
             except FileNotFoundError as e:
                 with contextlib.suppress(DatabaseNotYetInitialized):
                     print(f"RECOVER: {e} not found. Starting from scratch.")
-                    return setup_db(migrate=True, migrate_enabled=True)
+                    return setup_db(migrate_enabled=True)
                 with contextlib.suppress(DatabaseNotYetInitialized):
                     print("RECOVER: Failed. Starting from scratch with new .table file.")
-                    return setup_db(migrate=True, migrate_enabled=True, remove_migrate_tablefile=True)
+                    return setup_db(migrate_enabled=True, remove_migrate_tablefile=True)
 
             except Exception as e:
                 print("RECOVER: database recovery went wrong:", e)
