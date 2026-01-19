@@ -38,10 +38,24 @@ def psql(request):
 
 @pytest.fixture(scope="function", autouse=True)
 def clean_db():
-    # Connection URI
     from sqlalchemy_utils.functions import create_database, drop_database
+    from sqlalchemy import create_engine, text
 
     uri = postgres.get_connection_url()
+
+    # kill leftover connections from previous test
+    engine = create_engine(uri, isolation_level="AUTOCOMMIT")
+    with engine.connect() as conn:
+        conn.execute(
+            text("""
+            SELECT pg_terminate_backend(pid)
+            FROM pg_stat_activity
+            WHERE datname = current_database()
+              AND pid <> pg_backend_pid()
+            """)
+        )
+    engine.dispose()
+
     drop_database(uri)
     create_database(uri)
 
@@ -71,6 +85,7 @@ def test_setup_on_psql_not_long_running(conn_str: str, tempdir: str):
     )
 
     assert db.ewh_implemented_features
+    db.close()
 
 
 def test_setup_on_psql_long_running(conn_str: str, tempdir: str):
@@ -81,6 +96,7 @@ def test_setup_on_psql_long_running(conn_str: str, tempdir: str):
     )
 
     assert db.ewh_implemented_features
+    db.close()
 
 
 def psql_backup():

@@ -41,12 +41,17 @@ def test_env_migrate_uri_is_missing():
 
 
 def test_migrate_from_toml(clean_migrate):
+    base_path = pathlib.Path("/tmp/edwh-migrate")
+    base_path.mkdir(exist_ok=True)
+
+    target_path = base_path / "migrate_example.sqlite"
+
     config = get_config()
     assert migrate.setup_db(migrate=True, migrate_enabled=True)
 
-    assert config.migrate_uri == "sqlite:///tmp/edwh-migrate/migrate_example.sqlite"
+    assert config.migrate_uri == f"sqlite://{target_path}"
 
-    assert pathlib.Path("/tmp/edwh-migrate/migrate_example.sqlite").exists()
+    assert target_path.exists()
 
 
 def test_setup_db_custom_pydal_class(clean_migrate):
