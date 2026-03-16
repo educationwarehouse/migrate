@@ -7,7 +7,13 @@ from src.edwh_migrate import (
     migrate,
 )
 
-from .fixtures import clean_migrate, sqlite_empty, tmp_empty_sqlite_db_file, tmp_sqlite_folder  # noqa
+from .fixtures import (  # noqa
+    clean_migrate,
+    sqlite_empty,
+    tmp_empty_sqlite_db_file,
+    tmp_just_implemented_features_sqlite_db_file,
+    tmp_sqlite_folder,
+)
 
 
 class StandaloneView(ViewMigrationManager):
@@ -77,6 +83,17 @@ class MyChildView2(ViewMigrationManager):
         """)
 
 
+class UntilCurrentMigrationView(ViewMigrationManager):
+    until = "drop_legacy_view"
+    calls: list[str] = []
+
+    def up(self) -> None:
+        self.calls.append("up")
+
+    def down(self) -> None:
+        self.calls.append("down")
+
+
 def test_resolving_manager_order(tmp_empty_sqlite_db_file, clean_migrate):
     @migrate.migration()
     def first_migration(db):
@@ -105,3 +122,17 @@ def test_resolving_manager_order(tmp_empty_sqlite_db_file, clean_migrate):
     with pytest.raises(OperationalError):
         with MyChildView2(db), MyBaseView(db), MyChildView1(db):
             ...
+
+
+def test_until_current_migration_runs_down_but_not_up(tmp_just_implemented_features_sqlite_db_file, clean_migrate):
+    UntilCurrentMigrationView.calls = []
+
+    @migrate.migration()
+    def drop_legacy_view(db):
+        with UntilCurrentMigrationView(db):
+            ...
+
+        return True
+
+    assert migrate.activate_migrations()
+    assert UntilCurrentMigrationView.calls == ["down"]

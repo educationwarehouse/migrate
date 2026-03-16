@@ -166,7 +166,19 @@ class ViewMigrationManager(abc.ABC):
         """
         Perform checks to know whether this dependency is active.
         """
-        return self.check_since() and self.check_until()
+        return self.should_go_down()
+
+    def should_go_down(self) -> bool:
+        """
+        Decide whether this view should be torn down before the migration body runs.
+        """
+        return self.check_since() and self.check_until(include_current=True)
+
+    def should_go_up(self) -> bool:
+        """
+        Decide whether this view should be restored after the migration body runs.
+        """
+        return self.check_since() and self.check_until(include_current=False)
 
     def check_since(self) -> bool:
         """
@@ -185,7 +197,7 @@ class ViewMigrationManager(abc.ABC):
 
         return db(query).count() > 0
 
-    def check_until(self) -> bool:
+    def check_until(self, include_current: bool = False) -> bool:
         """
         If an 'until' is specified, that migration should not have run yet at this point.
         """
@@ -193,6 +205,9 @@ class ViewMigrationManager(abc.ABC):
 
         if not (until := self.until):
             return True
+
+        if os.environ[CURRENT_MIGRATION] == until:
+            return include_current
 
         query = db.ewh_implemented_features.name == until
         query &= db.ewh_implemented_features.installed == True
@@ -222,7 +237,7 @@ class ViewMigrationManager(abc.ABC):
         Returns:
             ViewMigrationManager: The current instance of the migration manager.
         """
-        if not self.should_run():
+        if not self.should_go_down():
             return
 
         for item in reversed(self.instances):
@@ -246,7 +261,7 @@ class ViewMigrationManager(abc.ABC):
             # block failed, don't try to go up!
             return
 
-        if not self.should_run():
+        if not self.should_go_up():
             return
 
         if not self.may_go_up:
