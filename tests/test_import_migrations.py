@@ -1,6 +1,7 @@
 import tempfile
 import textwrap
 from contextlib import chdir
+from pathlib import Path
 
 import pytest
 from configuraptor import Singleton
@@ -12,19 +13,17 @@ from src.edwh_migrate.migrate import Config, import_migrations, list_migrations
 @pytest.fixture
 def migrations_at_temp():
     with tempfile.TemporaryDirectory() as d:
-        fname = f"{d}/migrations.py"
-        with open(fname, "w") as f:
-            f.write(
-                textwrap.dedent(
-                    """
-            from src.edwh_migrate import migration
-            
-            @migration()
-            def test(db): return True
+        (Path(d) / "migrations.py").write_text(
+            textwrap.dedent(
+                """
+        from src.edwh_migrate import migration
+        
+        @migration()
+        def test(db): return True
 
-            """
-                )
+        """
             )
+        )
         yield d
 
 
@@ -39,7 +38,14 @@ def empty_config():
     migrate.migrations.reset()
     Singleton.clear()
 
-    return Config.load({})
+    config = Config.load({})
+    # Avoid accidentally importing the repository-level migrations.py during pytest.
+    config.migrations_file = "/fake/file"
+    yield config
+
+    # Also clean up after each test so failed imports don't leak into other test modules.
+    migrate.migrations.reset()
+    Singleton.clear()
 
 
 def test_list(migrations_at_temp: str, empty_config: Config):
@@ -76,3 +82,68 @@ def test_local(migrations_at_temp: str, empty_config: Config):
     empty_config.migrations_file = "/fake/file"
     with chdir(migrations_at_temp):
         assert import_migrations([], empty_config)
+
+
+def test_import_cross_module_dependency_ordering(empty_temp: str, empty_config: Config):
+    tmp = Path(empty_temp)
+
+    (tmp / "ordering_a.py").write_text(
+        textwrap.dedent(
+            """
+            from src.edwh_migrate import migration
+
+            @migration(requires=["ensure_sync_gid_defaults_use_uuidv7_20260423_001"])
+            def drop_pg_uuidv7_extension_20260423_001(db): return True
+            """
+        )
+    )
+
+    (tmp / "ordering_b.py").write_text(
+        textwrap.dedent(
+            """
+            import ordering_a
+            from src.edwh_migrate import migration
+
+            @migration()
+            def ensure_sync_gid_defaults_use_uuidv7_20260423_001(db): return True
+            """
+        )
+    )
+
+    (tmp / "migrations.py").write_text("import ordering_b\n")
+
+    with chdir(empty_temp):
+        assert import_migrations([], empty_config)
+
+
+def test_import_cross_module_dependency_cycle(empty_temp: str, empty_config: Config):
+    tmp = Path(empty_temp)
+
+    (tmp / "cycle_a.py").write_text(
+        textwrap.dedent(
+            """
+            from src.edwh_migrate import migration
+
+            @migration(requires=["migration_b_20260423_001"])
+            def migration_a_20260423_001(db): return True
+            """
+        )
+    )
+
+    (tmp / "cycle_b.py").write_text(
+        textwrap.dedent(
+            """
+            import cycle_a
+            from src.edwh_migrate import migration
+
+            @migration(requires=["migration_a_20260423_001"])
+            def migration_b_20260423_001(db): return True
+            """
+        )
+    )
+
+    (tmp / "migrations.py").write_text("import cycle_b\n")
+
+    with chdir(empty_temp):
+        with pytest.raises(ValueError, match="circular dependency"):
+            import_migrations([], empty_config)

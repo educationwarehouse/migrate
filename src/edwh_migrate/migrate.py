@@ -31,6 +31,7 @@ import urllib.parse
 import warnings
 from collections import OrderedDict
 from dataclasses import dataclass
+from heapq import heappop, heappush
 from pathlib import Path
 from typing import Optional
 
@@ -106,15 +107,26 @@ class MigrationStore(Singleton):
     _order: list[str]
     _migrations: list[Migration]
     _names: set[str]
+    _defer_dependency_validation: bool
 
     def __init__(self) -> None:
         self._order = []
         self._migrations = []
         # ^ can be zipped together
         self._names = set()
+        self._defer_dependency_validation = False
 
     def has(self, name: str) -> bool:
         return name in self._names
+
+    @contextlib.contextmanager
+    def defer_dependency_validation(self) -> typing.Iterator[None]:
+        previously_enabled = self._defer_dependency_validation
+        self._defer_dependency_validation = True
+        try:
+            yield
+        finally:
+            self._defer_dependency_validation = previously_enabled
 
     def register_ordered(self, fn: MigrationFn, requires: typing.Iterable[str] = ()) -> Migration:
         """Register a migration function with ordering and dependencies.
@@ -144,7 +156,7 @@ class MigrationStore(Singleton):
         if migrations.has(fn_name):
             raise ValueError(f"Duplicate migration name {fn_name}")
 
-        if requires:
+        if requires and not self._defer_dependency_validation:
             ranks = []
             for dep in requires:
                 dep_name = dep if isinstance(dep, str) else dep.__name__
@@ -166,6 +178,50 @@ class MigrationStore(Singleton):
         self._names.add(fn_name)
 
         return instance
+
+    def resolve_order(self) -> None:
+        if not self._order:
+            return
+
+        # Keep registration order as deterministic tie-breaker.
+        original_order = list(self._order)
+        original_rank = {name: i for i, name in enumerate(original_order)}
+        migration_by_name = dict(zip(self._order, self._migrations))
+
+        adjacency: dict[str, set[str]] = {name: set() for name in self._order}
+        indegree: dict[str, int] = {name: 0 for name in self._order}
+
+        for name in self._order:
+            migration = migration_by_name[name]
+            for dep in dict.fromkeys(migration.requires):
+                if dep not in self._names:
+                    raise ValueError(f"{name} depends on {dep} which is unknown.")
+
+                adjacency[dep].add(name)
+                indegree[name] += 1
+
+        available: list[tuple[int, str]] = []
+        for name in self._order:
+            if indegree[name] == 0:
+                heappush(available, (original_rank[name], name))
+
+        resolved: list[str] = []
+        while available:
+            _, current = heappop(available)
+            resolved.append(current)
+
+            for dependent in adjacency[current]:
+                indegree[dependent] -= 1
+                if indegree[dependent] == 0:
+                    heappush(available, (original_rank[dependent], dependent))
+
+        if len(resolved) != len(self._order):
+            unresolved = [name for name in original_order if indegree[name] > 0]
+            unresolved_s = ", ".join(unresolved)
+            raise ValueError(f"circular dependency detected among migrations: {unresolved_s}")
+
+        self._order = resolved
+        self._migrations = [migration_by_name[name] for name in resolved]
 
     def list(self) -> OrderedDict[str, Migration]:
         """
@@ -837,45 +893,49 @@ def import_migrations(args: list[str], config: Config) -> bool:
 
     Migrations get stored in `registered_functions`.
     """
-    if args:
-        print(f"Using argument {args[0]} as a reference to the migrations file.")
-        # use the first argument as a reference to the migrations file
-        # or the folder where the migrations file is stored
-        arg = Path(args[0])
-        if arg.exists() and arg.is_file():
-            print(f"importing migrations from {arg}")
+    with migrations.defer_dependency_validation():
+        if args:
+            print(f"Using argument {args[0]} as a reference to the migrations file.")
+            # use the first argument as a reference to the migrations file
+            # or the folder where the migrations file is stored
+            arg = Path(args[0])
+            if arg.exists() and arg.is_file():
+                print(f"importing migrations from {arg}")
+                sys.path.insert(0, str(arg.parent))
+                # importing the migrations.py file will register the functions
+                temporary_import(arg.stem)
+                migrations.resolve_order()
+                return True
+            elif arg.exists() and arg.is_dir():
+                print(f"importing migrations from {arg}/migrations.py")
+                sys.path.insert(0, str(arg))
+                # importing the migrations.py file will register the functions
+                temporary_import("migrations")
+                migrations.resolve_order()
+                return True
+            else:
+                print(f"ERROR: no migrations found at {arg}", file=sys.stderr)
+                return False
+
+        elif config.migrations_file and (arg := Path(config.migrations_file)) and arg.exists():
+            print(f"importing migrations from {arg.absolute()}")
             sys.path.insert(0, str(arg.parent))
             # importing the migrations.py file will register the functions
             temporary_import(arg.stem)
+            migrations.resolve_order()
             return True
-        elif arg.exists() and arg.is_dir():
-            print(f"importing migrations from {arg}/migrations.py")
-            sys.path.insert(0, str(arg))
+
+        elif Path("migrations.py").exists():
+            print("migrations.py exists, importing @migration decorated functions.")
+            sys.path.insert(0, os.getcwd())
             # importing the migrations.py file will register the functions
             temporary_import("migrations")
+
+            migrations.resolve_order()
             return True
         else:
-            print(f"ERROR: no migrations found at {arg}", file=sys.stderr)
+            print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
             return False
-
-    elif config.migrations_file and (arg := Path(config.migrations_file)) and arg.exists():
-        print(f"importing migrations from {arg.absolute()}")
-        sys.path.insert(0, str(arg.parent))
-        # importing the migrations.py file will register the functions
-        temporary_import(arg.stem)
-
-        return True
-
-    elif Path("migrations.py").exists():
-        print("migrations.py exists, importing @migration decorated functions.")
-        sys.path.insert(0, os.getcwd())
-        # importing the migrations.py file will register the functions
-        import migrations  # noqa F401: semantic import here
-
-        return True
-    else:
-        print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
-        return False
 
 
 def list_migrations(config: Config, args: Optional[list[str]] = None) -> OrderedDict[str, Migration]:
