@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v1.2.0 (2026-04-23)
+
+### Feature
+
+* **migrations:** Support cross-module dependency ordering with cycle detection ([`e9987a0`](https://github.com/educationwarehouse/migrate/commit/e9987a037c83b3405e6e6dcd135665e6ea49eeb4))
+
 ## v1.1.2 (2026-01-19)
 
 ### Fix
