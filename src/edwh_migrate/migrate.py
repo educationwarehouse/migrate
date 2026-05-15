@@ -21,6 +21,7 @@ import importlib
 import inspect
 import os
 import pathlib
+import re
 import sqlite3
 import sys
 import time
@@ -54,6 +55,13 @@ except ImportError:  # pragma: no cover
     TypeDAL = DAL
 
 MigrationFn: typing.TypeAlias = typing.Callable[[DAL], bool]
+MigrationOrderingMode: typing.TypeAlias = typing.Literal["legacy", "intertwined"]
+
+# Supports both strict names like `..._20260330_001` and lenient trailing numeric
+# names like `..._20260330_1` or `..._123_45`.
+MIGRATION_SUFFIX_RE = re.compile(r"(?P<first>\d+)(?:_(?P<second>\d+))?$")
+
+VALID_MIGRATION_ORDERING_MODES = set[str](typing.get_args(MigrationOrderingMode))
 
 
 @dataclass
@@ -183,10 +191,10 @@ class MigrationStore(Singleton):
         if not self._order:
             return
 
-        # Keep registration order as deterministic tie-breaker.
         original_order = list(self._order)
         original_rank = {name: i for i, name in enumerate(original_order)}
         migration_by_name = dict(zip(self._order, self._migrations))
+        ordering_mode = get_migration_ordering_mode()
 
         adjacency: dict[str, set[str]] = {name: set() for name in self._order}
         indegree: dict[str, int] = {name: 0 for name in self._order}
@@ -200,10 +208,10 @@ class MigrationStore(Singleton):
                 adjacency[dep].add(name)
                 indegree[name] += 1
 
-        available: list[tuple[int, str]] = []
+        available: list[tuple[tuple[int, int, int], str]] = []
         for name in self._order:
             if indegree[name] == 0:
-                heappush(available, (original_rank[name], name))
+                heappush(available, (_migration_heap_key(name, original_rank[name], ordering_mode), name))
 
         resolved: list[str] = []
         while available:
@@ -213,7 +221,10 @@ class MigrationStore(Singleton):
             for dependent in adjacency[current]:
                 indegree[dependent] -= 1
                 if indegree[dependent] == 0:
-                    heappush(available, (original_rank[dependent], dependent))
+                    heappush(
+                        available,
+                        (_migration_heap_key(dependent, original_rank[dependent], ordering_mode), dependent),
+                    )
 
         if len(resolved) != len(self._order):
             unresolved = [name for name in original_order if indegree[name] > 0]
@@ -252,6 +263,35 @@ class MigrationStore(Singleton):
 
     def __bool__(self) -> bool:
         return any(self._order)
+
+
+def _parse_migration_suffix(name: str) -> Optional[tuple[int, int]]:
+    match = MIGRATION_SUFFIX_RE.search(name)
+    if not match:
+        return None
+
+    first = int(match.group("first"))
+    second = int(match.group("second") or "0")
+    return first, second
+
+
+def _migration_heap_key(name: str, rank: int, mode: MigrationOrderingMode) -> tuple[int, int, int]:
+    # Topological sort tie-break key:
+    # 1) prefixed group (0 = suffixed in intertwined mode, 1 = fallback)
+    # 2) intertwined numeric order (or registration order)
+    # 3) registration order fallback for determinism
+    suffix = _parse_migration_suffix(name) if mode == "intertwined" else None
+    if suffix is not None:
+        first, second = suffix
+        return 0, first * 1_000_000 + second, rank
+    return 1, rank, rank
+
+
+def get_migration_ordering_mode(config: Optional["Config"] = None) -> MigrationOrderingMode:
+    selected_mode = (config.migration_ordering_mode if config else get_config().migration_ordering_mode).lower()
+    if selected_mode not in VALID_MIGRATION_ORDERING_MODES:
+        raise ValueError(f"Invalid migration_ordering_mode '{selected_mode}'. Expected one of: legacy, intertwined.")
+    return typing.cast(MigrationOrderingMode, selected_mode)
 
 
 migrations = MigrationStore()
@@ -333,6 +373,7 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
     db_folder: Optional[str] = None
     migrations_file: str = "migrations.py"
     use_typedal: bool = False
+    migration_ordering_mode: MigrationOrderingMode = "legacy"
 
     db_uri: str = alias("migrate_uri")
 
@@ -893,6 +934,15 @@ def import_migrations(args: list[str], config: Config) -> bool:
 
     Migrations get stored in `registered_functions`.
     """
+    if get_migration_ordering_mode(config) == "legacy":
+        warnings.warn(
+            "Using legacy migration ordering. "
+            "Set MIGRATION_ORDERING_MODE=intertwined (or tool.migrate.migration_ordering_mode) "
+            "to enable suffix-based interleaving. Legacy mode will become non-default in a future release.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+
     with migrations.defer_dependency_validation():
         if args:
             print(f"Using argument {args[0]} as a reference to the migrations file.")
