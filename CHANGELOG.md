@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v1.3.0-beta.3 (2026-05-15)
+
+### Fix
+
+* Pull migrations with 'requires' up again ([`f16c3d4`](https://github.com/educationwarehouse/migrate/commit/f16c3d4a75b483ff89766a50cb3958c31c61dfc2))
+
 ## v1.3.0-beta.2 (2026-05-15)
 
 ### Fix
