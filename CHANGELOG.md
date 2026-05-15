@@ -4,25 +4,11 @@
 
 ## v2.0.0 (2026-05-15)
 
-
-
-## v1.3.0-beta.3 (2026-05-15)
-
-### Fix
-
-* Pull migrations with 'requires' up again ([`f16c3d4`](https://github.com/educationwarehouse/migrate/commit/f16c3d4a75b483ff89766a50cb3958c31c61dfc2))
-
-## v1.3.0-beta.2 (2026-05-15)
-
-### Fix
-
-* Improved 'intertwined' support for non-suffixed migration names ([`9c1cb0c`](https://github.com/educationwarehouse/migrate/commit/9c1cb0c6f8c23c6b2c9336c924702a24e5051958))
-
-## v1.3.0-beta.1 (2026-05-15)
-
 ### Feature
 
 * Support new 'MIGRATION_ORDERING_MODE' that can intertwine multiple files based on date suffix, default to 'legacy' (= existing behavior) ([`8bb5d04`](https://github.com/educationwarehouse/migrate/commit/8bb5d0481a4d82843baac21e190fab0af1b4cd9f))
+* Improved 'intertwined' support for non-suffixed migration names ([`9c1cb0c`](https://github.com/educationwarehouse/migrate/commit/9c1cb0c6f8c23c6b2c9336c924702a24e5051958))
+* Pull migrations with 'requires' up again ([`f16c3d4`](https://github.com/educationwarehouse/migrate/commit/f16c3d4a75b483ff89766a50cb3958c31c61dfc2))
 
 ## v1.2.0 (2026-04-23)
 
