@@ -214,7 +214,8 @@ class MigrationStore(Singleton):
         available: list[tuple[HeapKey, str]] = []
         for name in self._order:
             if indegree[name] == 0:
-                heappush(available, (_migration_heap_key(name, original_rank[name], ordering_mode), name))
+                has_requires = bool(migration_by_name[name].requires)
+                heappush(available, (_migration_heap_key(name, original_rank[name], ordering_mode, has_requires), name))
 
         resolved: list[str] = []
         while available:
@@ -224,9 +225,18 @@ class MigrationStore(Singleton):
             for dependent in adjacency[current]:
                 indegree[dependent] -= 1
                 if indegree[dependent] == 0:
+                    has_requires = bool(migration_by_name[dependent].requires)
                     heappush(
                         available,
-                        (_migration_heap_key(dependent, original_rank[dependent], ordering_mode), dependent),
+                        (
+                            _migration_heap_key(
+                                dependent,
+                                original_rank[dependent],
+                                ordering_mode,
+                                has_requires,
+                            ),
+                            dependent,
+                        ),
                     )
 
         if len(resolved) != len(self._order):
@@ -278,19 +288,22 @@ def _parse_migration_suffix(name: str) -> Optional[tuple[int, int]]:
     return first, second
 
 
-HeapKey: typing.TypeAlias = tuple[int, int]
+HeapKey: typing.TypeAlias = tuple[int, int, int]
 
 
-def _migration_heap_key(name: str, rank: int, mode: MigrationOrderingMode) -> HeapKey:
+def _migration_heap_key(name: str, rank: int, mode: MigrationOrderingMode, has_requires: bool) -> HeapKey:
     # Topological sort tie-break key:
-    # 1) intertwined numeric order (or registration order in legacy mode)
-    # 2) registration order fallback for determinism
+    # 1) prioritize dependent migrations once their prerequisites are satisfied
+    # 2) intertwined numeric order (or registration order in legacy mode)
+    # 3) registration order fallback for determinism
+    requires_priority = 0 if has_requires else 1
+
     if mode == "intertwined":
         # Implicit 0 suffix for names without trailing numeric suffix.
         first, second = _parse_migration_suffix(name) or (0, 0)
-        return first * 1_000_000 + second, rank
+        return requires_priority, first * 1_000_000 + second, rank
     else:
-        return rank, rank
+        return requires_priority, rank, rank
 
 
 migrations = MigrationStore()

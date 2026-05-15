@@ -169,6 +169,9 @@ def test_import_intertwined_suffix_ordering(empty_temp: str, empty_config: Confi
 
             @migration()
             def rename_item_002(db): return True
+            
+            @migration(requires=[define_item_000])
+            def execute_me_early_004(db): return True
             """
         )
     )
@@ -194,6 +197,7 @@ def test_import_intertwined_suffix_ordering(empty_temp: str, empty_config: Confi
         found = list_migrations(empty_config)
         assert list(found.keys()) == [
             "define_item_000",
+            "execute_me_early_004",
             "define_tag_000",
             "old_style_without_suffix",
             "update_tag_001",
@@ -219,6 +223,9 @@ def test_import_legacy_ordering_keeps_definition_order(empty_temp: str, empty_co
 
             @migration()
             def rename_item_002(db): return True
+            
+            @migration(requires=[define_item_000])
+            def execute_me_early_004(db): return True
             """
         )
     )
@@ -244,6 +251,7 @@ def test_import_legacy_ordering_keeps_definition_order(empty_temp: str, empty_co
         found = list_migrations(empty_config)
         assert list(found.keys()) == [
             "define_item_000",
+            "execute_me_early_004",
             "define_tag_000",
             "rename_item_002",
             "update_tag_001",
