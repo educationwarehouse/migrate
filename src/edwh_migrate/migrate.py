@@ -191,24 +191,27 @@ class MigrationStore(Singleton):
         if not self._order:
             return
 
+        config = get_config()
+
         original_order = list(self._order)
         original_rank = {name: i for i, name in enumerate(original_order)}
         migration_by_name = dict(zip(self._order, self._migrations))
-        ordering_mode = get_migration_ordering_mode()
+
+        ordering_mode = config.migration_ordering_mode
 
         adjacency: dict[str, set[str]] = {name: set() for name in self._order}
         indegree: dict[str, int] = {name: 0 for name in self._order}
 
         for name in self._order:
-            migration = migration_by_name[name]
-            for dep in dict.fromkeys(migration.requires):
+            migration_obj = migration_by_name[name]
+            for dep in dict.fromkeys(migration_obj.requires):
                 if dep not in self._names:
                     raise ValueError(f"{name} depends on {dep} which is unknown.")
 
                 adjacency[dep].add(name)
                 indegree[name] += 1
 
-        available: list[tuple[tuple[int, int, int], str]] = []
+        available: list[tuple[HeapKey, str]] = []
         for name in self._order:
             if indegree[name] == 0:
                 heappush(available, (_migration_heap_key(name, original_rank[name], ordering_mode), name))
@@ -275,23 +278,19 @@ def _parse_migration_suffix(name: str) -> Optional[tuple[int, int]]:
     return first, second
 
 
-def _migration_heap_key(name: str, rank: int, mode: MigrationOrderingMode) -> tuple[int, int, int]:
+HeapKey: typing.TypeAlias = tuple[int, int]
+
+
+def _migration_heap_key(name: str, rank: int, mode: MigrationOrderingMode) -> HeapKey:
     # Topological sort tie-break key:
-    # 1) prefixed group (0 = suffixed in intertwined mode, 1 = fallback)
-    # 2) intertwined numeric order (or registration order)
-    # 3) registration order fallback for determinism
-    suffix = _parse_migration_suffix(name) if mode == "intertwined" else None
-    if suffix is not None:
-        first, second = suffix
-        return 0, first * 1_000_000 + second, rank
-    return 1, rank, rank
-
-
-def get_migration_ordering_mode(config: Optional["Config"] = None) -> MigrationOrderingMode:
-    selected_mode = (config.migration_ordering_mode if config else get_config().migration_ordering_mode).lower()
-    if selected_mode not in VALID_MIGRATION_ORDERING_MODES:
-        raise ValueError(f"Invalid migration_ordering_mode '{selected_mode}'. Expected one of: legacy, intertwined.")
-    return typing.cast(MigrationOrderingMode, selected_mode)
+    # 1) intertwined numeric order (or registration order in legacy mode)
+    # 2) registration order fallback for determinism
+    if mode == "intertwined":
+        # Implicit 0 suffix for names without trailing numeric suffix.
+        first, second = _parse_migration_suffix(name) or (0, 0)
+        return first * 1_000_000 + second, rank
+    else:
+        return rank, rank
 
 
 migrations = MigrationStore()
@@ -801,12 +800,12 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
     successes = []
 
     # perform migrations
-    for name, migration in migrations:
+    for name, migration_obj in migrations:
         print("test:", name)
 
         if should_run(db, name):
             # with global db instead of function-specific one so implemented_features is always up-to-date:
-            migration.check_requires(db)
+            migration_obj.check_requires(db)
 
             print("run: ", name)
             # black magic fuckery via env
@@ -823,10 +822,10 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
 
             start_wall, start_cpu = time.perf_counter(), time.process_time()
             try:
-                result = migration(db_for_this_function)
+                result = migration_obj(db_for_this_function)
                 successes.append(result)
             except Exception:
-                function = migration.body
+                function = migration_obj.body
                 print(f"failed: {name} in {inspect.getfile(function)}:{inspect.getsourcelines(function)[1]}")
                 print(traceback.format_exc(), file=sys.stderr)
                 db_for_this_function.close()
@@ -934,14 +933,14 @@ def import_migrations(args: list[str], config: Config) -> bool:
 
     Migrations get stored in `registered_functions`.
     """
-    if get_migration_ordering_mode(config) == "legacy":
-        warnings.warn(
-            "Using legacy migration ordering. "
-            "Set MIGRATION_ORDERING_MODE=intertwined (or tool.migrate.migration_ordering_mode) "
-            "to enable suffix-based interleaving. Legacy mode will become non-default in a future release.",
-            DeprecationWarning,
-            stacklevel=2,
-        )
+    # if config.migration_ordering_mode == "legacy":
+    #     warnings.warn(
+    #         "Using legacy migration ordering. "
+    #         "Set MIGRATION_ORDERING_MODE=intertwined (or tool.migrate.migration_ordering_mode) "
+    #         "to enable suffix-based interleaving. Legacy mode will become non-default in a future release.",
+    #         DeprecationWarning,
+    #         stacklevel=2,
+    #     )
 
     with migrations.defer_dependency_validation():
         if args:
@@ -1004,8 +1003,8 @@ def print_migrations_status_table(config: Config) -> None:  # pragma: no cover
     """
     db = setup_db(config=config)
 
-    migrations = list_migrations(config)
-    if not migrations:
+    registered_migrations = list_migrations(config)
+    if not registered_migrations:
         # nothing to do, exit with error:
         exit(1)
 
@@ -1013,9 +1012,9 @@ def print_migrations_status_table(config: Config) -> None:  # pragma: no cover
     rows = db(db.ewh_implemented_features).select().as_dict("name")
     table = []
 
-    print(f"{len(migrations)} migrations discovered:")
+    print(f"{len(registered_migrations)} migrations discovered:")
 
-    for migration_name in migrations:
+    for migration_name in registered_migrations:
         # Print out the content for every row where the name has been found in registered_functions.
         if migration_name in rows:
             status = "succeeded" if rows[migration_name]["installed"] else "failed"

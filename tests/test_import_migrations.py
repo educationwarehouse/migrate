@@ -165,6 +165,9 @@ def test_import_intertwined_suffix_ordering(empty_temp: str, empty_config: Confi
             def define_tag_000(db): return True
 
             @migration()
+            def old_style_without_suffix(db): return True
+
+            @migration()
             def rename_item_002(db): return True
             """
         )
@@ -192,6 +195,7 @@ def test_import_intertwined_suffix_ordering(empty_temp: str, empty_config: Confi
         assert list(found.keys()) == [
             "define_item_000",
             "define_tag_000",
+            "old_style_without_suffix",
             "update_tag_001",
             "rename_item_002",
             "update_tag_003",
