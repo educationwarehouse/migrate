@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v1.3.0-beta.2 (2026-05-15)
+
+### Fix
+
+* Improved 'intertwined' support for non-suffixed migration names ([`9c1cb0c`](https://github.com/educationwarehouse/migrate/commit/9c1cb0c6f8c23c6b2c9336c924702a24e5051958))
+
 ## v1.3.0-beta.1 (2026-05-15)
 
 ### Feature
