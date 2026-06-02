@@ -147,3 +147,113 @@ def test_import_cross_module_dependency_cycle(empty_temp: str, empty_config: Con
     with chdir(empty_temp):
         with pytest.raises(ValueError, match="circular dependency"):
             import_migrations([], empty_config)
+
+
+def test_import_intertwined_suffix_ordering(empty_temp: str, empty_config: Config):
+    tmp = Path(empty_temp)
+    empty_config.migration_ordering_mode = "intertwined"
+
+    (tmp / "core_intertwined.py").write_text(
+        textwrap.dedent(
+            """
+            from src.edwh_migrate import migration
+
+            @migration()
+            def define_item_000(db): return True
+
+            @migration()
+            def define_tag_000(db): return True
+
+            @migration()
+            def old_style_without_suffix(db): return True
+
+            @migration()
+            def rename_item_002(db): return True
+            
+            @migration(requires=[define_item_000])
+            def execute_me_early_004(db): return True
+            """
+        )
+    )
+
+    (tmp / "whitelabel_intertwined.py").write_text(
+        textwrap.dedent(
+            """
+            from src.edwh_migrate import migration
+
+            @migration()
+            def update_tag_001(db): return True
+
+            @migration()
+            def update_tag_003(db): return True
+            """
+        )
+    )
+
+    (tmp / "migrations.py").write_text("import core_intertwined\nimport whitelabel_intertwined\n")
+
+    with chdir(empty_temp):
+        assert import_migrations([], empty_config)
+        found = list_migrations(empty_config)
+        assert list(found.keys()) == [
+            "define_item_000",
+            "execute_me_early_004",
+            "define_tag_000",
+            "old_style_without_suffix",
+            "update_tag_001",
+            "rename_item_002",
+            "update_tag_003",
+        ]
+
+
+def test_import_legacy_ordering_keeps_definition_order(empty_temp: str, empty_config: Config):
+    tmp = Path(empty_temp)
+    empty_config.migration_ordering_mode = "legacy"
+
+    (tmp / "core_legacy.py").write_text(
+        textwrap.dedent(
+            """
+            from src.edwh_migrate import migration
+
+            @migration()
+            def define_item_000(db): return True
+
+            @migration()
+            def define_tag_000(db): return True
+
+            @migration()
+            def rename_item_002(db): return True
+            
+            @migration(requires=[define_item_000])
+            def execute_me_early_004(db): return True
+            """
+        )
+    )
+
+    (tmp / "whitelabel_legacy.py").write_text(
+        textwrap.dedent(
+            """
+            from src.edwh_migrate import migration
+
+            @migration()
+            def update_tag_001(db): return True
+
+            @migration()
+            def update_tag_003(db): return True
+            """
+        )
+    )
+
+    (tmp / "migrations.py").write_text("import core_legacy\nimport whitelabel_legacy\n")
+
+    with chdir(empty_temp):
+        assert import_migrations([], empty_config)
+        found = list_migrations(empty_config)
+        assert list(found.keys()) == [
+            "define_item_000",
+            "execute_me_early_004",
+            "define_tag_000",
+            "rename_item_002",
+            "update_tag_001",
+            "update_tag_003",
+        ]

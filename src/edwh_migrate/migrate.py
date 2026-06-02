@@ -21,6 +21,7 @@ import importlib
 import inspect
 import os
 import pathlib
+import re
 import sqlite3
 import sys
 import time
@@ -54,6 +55,13 @@ except ImportError:  # pragma: no cover
     TypeDAL = DAL
 
 MigrationFn: typing.TypeAlias = typing.Callable[[DAL], bool]
+MigrationOrderingMode: typing.TypeAlias = typing.Literal["legacy", "intertwined"]
+
+# Supports both strict names like `..._20260330_001` and lenient trailing numeric
+# names like `..._20260330_1` or `..._123_45`.
+MIGRATION_SUFFIX_RE = re.compile(r"(?P<first>\d+)(?:_(?P<second>\d+))?$")
+
+VALID_MIGRATION_ORDERING_MODES = set[str](typing.get_args(MigrationOrderingMode))
 
 
 @dataclass
@@ -183,27 +191,31 @@ class MigrationStore(Singleton):
         if not self._order:
             return
 
-        # Keep registration order as deterministic tie-breaker.
+        config = get_config()
+
         original_order = list(self._order)
         original_rank = {name: i for i, name in enumerate(original_order)}
         migration_by_name = dict(zip(self._order, self._migrations))
+
+        ordering_mode = config.migration_ordering_mode
 
         adjacency: dict[str, set[str]] = {name: set() for name in self._order}
         indegree: dict[str, int] = {name: 0 for name in self._order}
 
         for name in self._order:
-            migration = migration_by_name[name]
-            for dep in dict.fromkeys(migration.requires):
+            migration_obj = migration_by_name[name]
+            for dep in dict.fromkeys(migration_obj.requires):
                 if dep not in self._names:
                     raise ValueError(f"{name} depends on {dep} which is unknown.")
 
                 adjacency[dep].add(name)
                 indegree[name] += 1
 
-        available: list[tuple[int, str]] = []
+        available: list[tuple[HeapKey, str]] = []
         for name in self._order:
             if indegree[name] == 0:
-                heappush(available, (original_rank[name], name))
+                has_requires = bool(migration_by_name[name].requires)
+                heappush(available, (_migration_heap_key(name, original_rank[name], ordering_mode, has_requires), name))
 
         resolved: list[str] = []
         while available:
@@ -213,7 +225,19 @@ class MigrationStore(Singleton):
             for dependent in adjacency[current]:
                 indegree[dependent] -= 1
                 if indegree[dependent] == 0:
-                    heappush(available, (original_rank[dependent], dependent))
+                    has_requires = bool(migration_by_name[dependent].requires)
+                    heappush(
+                        available,
+                        (
+                            _migration_heap_key(
+                                dependent,
+                                original_rank[dependent],
+                                ordering_mode,
+                                has_requires,
+                            ),
+                            dependent,
+                        ),
+                    )
 
         if len(resolved) != len(self._order):
             unresolved = [name for name in original_order if indegree[name] > 0]
@@ -252,6 +276,34 @@ class MigrationStore(Singleton):
 
     def __bool__(self) -> bool:
         return any(self._order)
+
+
+def _parse_migration_suffix(name: str) -> Optional[tuple[int, int]]:
+    match = MIGRATION_SUFFIX_RE.search(name)
+    if not match:
+        return None
+
+    first = int(match.group("first"))
+    second = int(match.group("second") or "0")
+    return first, second
+
+
+HeapKey: typing.TypeAlias = tuple[int, int, int]
+
+
+def _migration_heap_key(name: str, rank: int, mode: MigrationOrderingMode, has_requires: bool) -> HeapKey:
+    # Topological sort tie-break key:
+    # 1) prioritize dependent migrations once their prerequisites are satisfied
+    # 2) intertwined numeric order (or registration order in legacy mode)
+    # 3) registration order fallback for determinism
+    requires_priority = 0 if has_requires else 1
+
+    if mode == "intertwined":
+        # Implicit 0 suffix for names without trailing numeric suffix.
+        first, second = _parse_migration_suffix(name) or (0, 0)
+        return requires_priority, first * 1_000_000 + second, rank
+    else:
+        return requires_priority, rank, rank
 
 
 migrations = MigrationStore()
@@ -333,6 +385,7 @@ class Config(configuraptor.TypedConfig, configuraptor.Singleton):
     db_folder: Optional[str] = None
     migrations_file: str = "migrations.py"
     use_typedal: bool = False
+    migration_ordering_mode: MigrationOrderingMode = "legacy"
 
     db_uri: str = alias("migrate_uri")
 
@@ -760,12 +813,12 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
     successes = []
 
     # perform migrations
-    for name, migration in migrations:
+    for name, migration_obj in migrations:
         print("test:", name)
 
         if should_run(db, name):
             # with global db instead of function-specific one so implemented_features is always up-to-date:
-            migration.check_requires(db)
+            migration_obj.check_requires(db)
 
             print("run: ", name)
             # black magic fuckery via env
@@ -783,10 +836,10 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
 
             start_wall, start_cpu = time.perf_counter(), time.process_time()
             try:
-                result = migration(db_for_this_function)
+                result = migration_obj(db_for_this_function)
                 successes.append(result)
             except Exception:
-                function = migration.body
+                function = migration_obj.body
                 print(f"failed: {name} in {inspect.getfile(function)}:{inspect.getsourcelines(function)[1]}")
                 print(traceback.format_exc(), file=sys.stderr)
                 db_for_this_function.close()
@@ -894,6 +947,15 @@ def import_migrations(args: list[str], config: Config) -> bool:
 
     Migrations get stored in `registered_functions`.
     """
+    # if config.migration_ordering_mode == "legacy":
+    #     warnings.warn(
+    #         "Using legacy migration ordering. "
+    #         "Set MIGRATION_ORDERING_MODE=intertwined (or tool.migrate.migration_ordering_mode) "
+    #         "to enable suffix-based interleaving. Legacy mode will become non-default in a future release.",
+    #         DeprecationWarning,
+    #         stacklevel=2,
+    #     )
+
     with migrations.defer_dependency_validation():
         if args:
             print(f"Using argument {args[0]} as a reference to the migrations file.")
@@ -965,8 +1027,8 @@ def print_migrations_status_table(config: Config) -> None:  # pragma: no cover
     """
     db = setup_db(config=config)
 
-    migrations = list_migrations(config)
-    if not migrations:
+    registered_migrations = list_migrations(config)
+    if not registered_migrations:
         # nothing to do, exit with error:
         exit(1)
 
@@ -974,9 +1036,9 @@ def print_migrations_status_table(config: Config) -> None:  # pragma: no cover
     rows = db(db.ewh_implemented_features).select().as_dict("name")
     table = []
 
-    print(f"{len(migrations)} migrations discovered:")
+    print(f"{len(registered_migrations)} migrations discovered:")
 
-    for migration_name in migrations:
+    for migration_name in registered_migrations:
         # Print out the content for every row where the name has been found in registered_functions.
         if migration_name in rows:
             status = "succeeded" if rows[migration_name]["installed"] else "failed"
