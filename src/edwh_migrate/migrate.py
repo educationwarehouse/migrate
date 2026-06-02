@@ -478,7 +478,7 @@ def setup_db(
     is_postgres = uri.startswith("postgres")
     driver_args: dict[str, typing.Any] = {}
     if is_postgres:
-        driver_args["application_name"] = appname
+        driver_args["application_name"] = truncate_appname(appname)
         if not long_running:
             driver_args["keepalives"] = 1
 
@@ -778,7 +778,8 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
             # because there could be tables being defined,
             # and we want all the functions to be siloed and not
             # have database schema dependencies and collisions.
-            db_for_this_function = setup_db(appname=f"edwh-migrate-{name}")
+
+            db_for_this_function = setup_db(appname=truncate_appname(f"edwh-migrate-{name}"))
 
             start_wall, start_cpu = time.perf_counter(), time.process_time()
             try:
@@ -936,6 +937,16 @@ def import_migrations(args: list[str], config: Config) -> bool:
         else:
             print(f"ERROR: no migrations found at {os.getcwd()}", file=sys.stderr)
             return False
+
+
+def truncate_appname(name: str, max_len: int = 63) -> str:
+    """
+    Postgres will throw a NOTICE: if your appname (or migration name used as appname) is too long.
+
+    This can make you think the name of the migration will be truncated in the database when it will not.
+    Hence we use this function to truncate it before postgres.
+    """
+    return name[:max_len]
 
 
 def list_migrations(config: Config, args: Optional[list[str]] = None) -> OrderedDict[str, Migration]:

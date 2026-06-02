@@ -7,6 +7,7 @@ from configuraptor import Singleton
 from pydal import DAL
 from testcontainers.postgres import PostgresContainer
 
+from edwh_migrate import migration
 from src.edwh_migrate import (
     Config,
     activate_migrations,
@@ -128,3 +129,24 @@ def test_postgres_unavailable(conn_str: str, tempdir: str):
     )
     with pytest.raises(ValueError):
         activate_migrations(config=config, max_time=5)
+
+
+def test_very_long_migration_name_notice(conn_str: str, tempdir: str, capfd):
+    # capfd is like capsys but also works for c-libraries like postgres
+    config = Config.load(
+        dict(
+            migrate_uri=conn_str,
+            db_folder=tempdir,
+        )
+    )
+
+    @migration()
+    def veryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryveryverylong(
+        db,
+    ):
+        print("ok")
+
+    activate_migrations(config=config, max_time=5)
+    captured = capfd.readouterr()
+
+    assert "NOTICE:" not in captured.err
