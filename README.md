@@ -60,20 +60,20 @@ database-to-restore = "migrate/data/db_backup.sql"
 ```python
 from edwh_migrate import migration
 
+
 @migration
 def feature_1(db):
     print("feature_1")
     return True
 
 
-@migration(requires=[feature_1]) # optional `requires` ensures previous migration(s) are installed
+@migration(requires=[feature_1])  # optional `requires` ensures previous migration(s) are installed
 def functionalname_date_sequencenr(db: pydal.DAL):
     db.executesql("""
         CREATE TABLE ...
     """)
     db.commit()
     return True
-
 ```
 
 ### Usage
@@ -99,6 +99,7 @@ migrate path/to/my/migrate_file.py
     ```python
     from edwh_migrate import ViewMigrationManager
 
+
     class MyExampleView_V1(ViewMigrationManager):
         # Define dependencies (optional)
         uses = ()
@@ -108,19 +109,20 @@ migrate path/to/my/migrate_file.py
         def up(self):
             # Logic to apply the migration
             self.db.executesql(
-                '''
+                """
                 CREATE MATERIALIZED VIEW my_example_view AS
                 SELECT id, name FROM my_table;
-                '''
+                """
             )
 
         def down(self):
             # Logic to reverse the migration
             self.db.executesql(
-                '''
+                """
                 DROP MATERIALIZED VIEW IF EXISTS my_example_view;
-                '''
+                """
             )
+
 
     class AnotherExampleView(ViewMigrationManager):
         # This class depends on MyExampleView_V1
@@ -129,18 +131,18 @@ migrate path/to/my/migrate_file.py
         def up(self):
             # Logic to apply the migration
             self.db.executesql(
-                '''
+                """
                 CREATE MATERIALIZED VIEW another_example_view AS
                 SELECT id, name FROM my_example_view;
-                '''
+                """
             )
 
         def down(self):
             # Logic to reverse the migration
             self.db.executesql(
-                '''
+                """
                 DROP MATERIALIZED VIEW IF EXISTS another_example_view;
-                '''
+                """
             )
     ```
 
@@ -149,14 +151,15 @@ migrate path/to/my/migrate_file.py
     ```python
     from edwh_migrate import migration
 
+
     @migration
     def previous_migration(db):
-        db.executesql('''
+        db.executesql("""
         CREATE TABLE my_table (
             id SERIAL PRIMARY KEY,
             name VARCHAR(255)
         );
-        ''')
+        """)
         db.commit()
         return True
     ```
@@ -166,13 +169,14 @@ migrate path/to/my/migrate_file.py
     ```python
     from edwh_migrate import migration
 
+
     @migration
     def upgrade_some_source_table_that_my_example_view_depends_on(db):
         with MyExampleView_V1(db):
-            db.executesql('''
+            db.executesql("""
             ALTER TABLE my_table
             ADD COLUMN new_column VARCHAR(255);
-            ''')
+            """)
         db.commit()
         return True
     ```
