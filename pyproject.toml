@@ -215,3 +215,7 @@ json-indent = 4
 create-flag-location = true
 migrate-uri = "sqlite:///tmp/edwh-migrate/migrate_example.sqlite"
 flag-location = "/tmp/edwh-migrate/migrate_flags"
+
+[tool.edwh.test]
+# tests are collected from `.`, but only our own code is measured
+directory = "src"
