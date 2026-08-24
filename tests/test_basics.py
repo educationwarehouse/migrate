@@ -68,6 +68,7 @@ def test_apply_empty_run_to_empty_sqlite(tmp_empty_sqlite_db_file, clean_migrate
 
 
 def test_starts_without_registered_migrations(clean_migrate):
+    migrate.migrations.resolve_order()
     assert len(migrate.migrations) == 0, "No migrations should be registered"
 
 
@@ -267,6 +268,41 @@ def test_schema_versioned_lock_file(capsys, clean_migrate):
     captured = capsys.readouterr()
 
     assert "removing the lock file" not in captured.out
+
+
+def test_console_hook_reports_failed_migrations(tmp_empty_sqlite_db_file, clean_migrate, capsys, tmp_path):
+    migration_file = tmp_path / "migrations.py"
+    migration_file.write_text(
+        "from src.edwh_migrate import migration\n\n@migration\ndef failing_migration(db):\n    return False\n"
+    )
+
+    config = get_config()
+    config.flag_location = str(tmp_path)
+    config.schema_version = "1"
+
+    assert migrate._console_hook([str(migration_file)], config) == 1
+
+    captured = capsys.readouterr()
+    assert "ERROR: migration failed (Failed migration(s): failing_migration), removing the lock file." in captured.out
+
+
+def test_console_hook_reports_unknown_string_dependency(tmp_empty_sqlite_db_file, clean_migrate, capsys, tmp_path):
+    migration_file = tmp_path / "migrations.py"
+    migration_file.write_text(
+        "from src.edwh_migrate import migration\n\n"
+        "@migration(requires='missing_migration')\n"
+        "def dependent_migration(db):\n"
+        "    return True\n"
+    )
+
+    config = get_config()
+    config.flag_location = str(tmp_path)
+    config.schema_version = "1"
+
+    assert migrate._console_hook([str(migration_file)], config) == 1
+
+    captured = capsys.readouterr()
+    assert "dependent_migration depends on missing_migration which is unknown." in captured.out
 
 
 def test_without_migrate_uri_but_with_db_uri_and_folder(fixture_temp_chdir, clean_migrate):

@@ -800,7 +800,11 @@ def mark_migration(db: DAL, name: str, installed: bool) -> int | None:
     )
 
 
-def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MINUTES) -> bool:
+def activate_migrations(
+    config: Optional[Config] = None,
+    max_time: int = TEN_MINUTES,
+    failed_migrations: list[str] | None = None,
+) -> bool:
     """
     Start the migration process, don't wait for a lock.
     """
@@ -811,6 +815,7 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
         raise ValueError("No db could be set up!")
 
     successes = []
+    failed_migrations = failed_migrations if failed_migrations is not None else []
 
     # perform migrations
     for name, migration_obj in migrations:
@@ -842,6 +847,7 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
                 print(f"failed: {name} in {inspect.getfile(function)}:{inspect.getsourcelines(function)[1]}")
                 print(traceback.format_exc(), file=sys.stderr)
                 db_for_this_function.close()
+                failed_migrations.append(name)
                 return False
 
             time_cpu = time.process_time() - start_cpu
@@ -856,6 +862,7 @@ def activate_migrations(config: Optional[Config] = None, max_time: int = TEN_MIN
                 # try a rollback, because we should ignore whatever happend
                 db_for_this_function.rollback()
                 print("ran: ", name, "and failed", timings)
+                failed_migrations.append(name)
 
             # and close because this connection is not used any longer.
             db_for_this_function.close()
@@ -920,9 +927,12 @@ def schema_versioned_lock_file(
                 yield lock_file
                 # executed after successful with block:
                 lock_file.touch()
-            except MigrationFailed:
+            except MigrationFailed as error:
                 # remove the lock file, so that the migration can be retried.
-                print("ERROR: migration failed, removing the lock file.")
+                if error.args:
+                    print(f"ERROR: migration failed ({error}), removing the lock file.")
+                else:
+                    print("ERROR: migration failed, removing the lock file.")
                 print(f"Check the {config.migrate_table} table for details.")
                 lock_file.unlink(missing_ok=True)
 
@@ -1045,7 +1055,7 @@ def print_trimmed_exception(error: BaseException):
 
     for index, frame in enumerate(tb_exc.stack):
         filename = frame.filename or ""
-        if "importlib._bootstrap" in filename:
+        if "importlib._bootstrap" in filename:  # pragma: no cover
             last_bootstrap_index = index
 
     filtered = tb_exc.stack[last_bootstrap_index + 1 :]
@@ -1092,8 +1102,10 @@ def _console_hook(args: list[str], config: Optional[Config] = None) -> int:  # p
             print("starting migrate hook")
             print(f"{len(migrations)} migrations discovered")
 
-            if not activate_migrations(config):
-                raise MigrationFailed("Not every migration succeeded.")
+            failed_migrations: list[str] = []
+            if not activate_migrations(config, failed_migrations=failed_migrations):
+                names = ", ".join(failed_migrations)
+                raise MigrationFailed(f"Failed migration(s): {names}")
 
             print("migration completed successfully, marking success.")
             success = True
