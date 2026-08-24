@@ -6,4 +6,6 @@ This file stores the package version.
 #
 # SPDX-License-Identifier: MIT
 
-__version__ = "2.0.1"
+from importlib.metadata import version
+
+__version__ = version("edwh-migrate")
