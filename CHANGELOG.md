@@ -2,6 +2,12 @@
 
 <!--next-version-placeholder-->
 
+## v2.0.1 (2026-06-02)
+
+### Fix
+
+* Silence confusing postgres NOTICE about long migration names ([`87d326a`](https://github.com/educationwarehouse/migrate/commit/87d326a5cd58ac295106dac178e8cea7eae8a62c))
+
 ## v2.0.0 (2026-05-15)
 
 ### Feature
