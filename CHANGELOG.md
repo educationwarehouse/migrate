@@ -2,6 +2,15 @@
 
 <!--next-version-placeholder-->
 
+## v2.0.2 (2026-08-24)
+
+### Fix
+* **migrate:** include failed migration names in errors
+
+### Documentation
+* **examples:** normalize migration snippets
+* document missing config keys, CLI flags, ordering modes and library API
+
 ## v2.0.1 (2026-06-02)
 
 ### Fix
