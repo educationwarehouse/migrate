@@ -2,6 +2,14 @@
 
 <!--next-version-placeholder-->
 
+## v2.0.3 (2026-09-18)
+
+### Feature
+* classify Python 3.14 support (#7)
+
+### Fix
+* **migrate:** allow injecting the PostgreSQL client
+
 ## v2.0.2 (2026-08-24)
 
 ### Fix

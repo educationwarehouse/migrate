@@ -31,7 +31,7 @@ dependencies = [
     "tabulate",
     "legacy-cgi; python_version >= '3.13'"
 ]
-version = "2.0.2"
+version = "2.0.3"
 
 [project.optional-dependencies]
 full = [
