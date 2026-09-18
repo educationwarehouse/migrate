@@ -6,7 +6,7 @@ build-backend = "uv_build"
 name = "edwh-migrate"
 description = 'Helps migrating database schema changes using pydal. '
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 license-expression = "MIT"
 keywords = ['pydal', 'postgresql', 'migrate', 'schema-change', 'database-migration']
 authors = [
@@ -16,7 +16,6 @@ authors = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
@@ -41,8 +40,7 @@ full = [
 ]
 
 dev = [
-    "hatch",
-    "black",
+    "edwh",
     "typedal",
     "isort",
     "pytest",
@@ -158,7 +156,7 @@ all = [
 ]
 
 [tool.black]
-target-version = ["py310"]
+target-version = ["py311"]
 line-length = 120
 
 [tool.mypy]
@@ -166,7 +164,7 @@ ignore_missing_imports = true
 strict = true
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py311"
 line-length = 120
 extend-exclude = ["*.bak/", "venv*/"]
 
@@ -215,6 +213,11 @@ ban-relative-imports = "all"
 [tool.pytest.ini_options]
 pythonpath = [
     "src",
+]
+
+[tool.coverage.report]
+exclude_also = [
+    "if .*TYPE_CHECKING:",
 ]
 
 [tool.pydocstyle]

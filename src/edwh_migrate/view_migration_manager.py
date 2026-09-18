@@ -1,15 +1,21 @@
 import abc
 import os
 import types
-import typing
+import typing as t
 import warnings
-
-from pydal import DAL
 
 from .constants import CURRENT_MIGRATION
 from .helpers import classproperty
 
-E = typing.TypeVar("E", bound=Exception)
+E = t.TypeVar("E", bound=Exception)
+
+if t.TYPE_CHECKING:
+    from pydal import DAL as pyDAL
+    from typedal import TypeDAL
+
+    DAL: t.TypeAlias = pyDAL | TypeDAL
+else:
+    from pydal import DAL
 
 
 class ViewMigrationManager(abc.ABC):
@@ -88,7 +94,7 @@ class ViewMigrationManager(abc.ABC):
 
     @abc.abstractmethod
     @classproperty
-    def uses(cls) -> typing.Iterable[typing.Type["ViewMigrationManager"]]:
+    def uses(cls) -> t.Iterable[t.Type["ViewMigrationManager"]]:
         """
         List/tuple of view migration classes that this one depends on.
         """
@@ -116,11 +122,11 @@ class ViewMigrationManager(abc.ABC):
         return ""
 
     # note: manually setting `used_by` is deprecated!
-    _used_by: list[typing.Type["ViewMigrationManager"]]
+    _used_by: list[t.Type["ViewMigrationManager"]]
 
     may_go_up = False
 
-    def __init__(self, db: DAL, cache: typing.Optional[dict] = None):
+    def __init__(self, db: DAL, cache: t.Optional[dict] = None):
         """
         Initialize the ViewMigrationManager with a database connection.
 
@@ -157,7 +163,7 @@ class ViewMigrationManager(abc.ABC):
             cls._used_by = []
 
         # pycharm doesn't really understand abstract class properties so cast the type here:
-        dependencies = typing.cast(typing.Iterable[typing.Type["ViewMigrationManager"]], cls.uses)
+        dependencies = t.cast(t.Iterable[t.Type["ViewMigrationManager"]], cls.uses)
 
         for dependency_cls in dependencies:
             dependency_cls._used_by.append(cls)
@@ -231,7 +237,12 @@ class ViewMigrationManager(abc.ABC):
         self.down()
         self.may_go_up = True
 
-    def __exit__(self, exc_type: typing.Type[E], exc_value: E, tb: types.TracebackType) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        tb: types.TracebackType | None,
+    ) -> None:
         """
         Context management method for exiting the runtime context related to the migration.
         This method calls the `up` method to apply the migration after the block of code finishes,
