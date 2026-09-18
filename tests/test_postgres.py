@@ -105,15 +105,21 @@ def psql_backup():
     return str(path)
 
 
-def test_postgres_backup(conn_str: str, tempdir: str):
+@pytest.fixture()
+def psql_in_container():
+    return migrate.plumbum.local["docker"]["exec", "-i", postgres.get_wrapped_container().id, "psql"]
+
+
+def test_postgres_backup(conn_str: str, tempdir: str, psql_in_container):
     db = DAL(conn_str)
 
     with pytest.raises(PostgresUndefinedTable):
         db.executesql("SELECT count(*) FROM ewh_implemented_features")
     db.rollback()
 
-    config = Config.load(dict(migrate_uri=conn_str, db_folder=tempdir, database_to_restore=psql_backup()))
-    recover_database_from_backup(set_schema="public")
+    container_uri = f"postgres://{postgres.username}:{postgres.password}@127.0.0.1:5432/{DB_NAME}"
+    config = Config.load(dict(migrate_uri=container_uri, db_folder=tempdir, database_to_restore=psql_backup()))
+    recover_database_from_backup(config=config, set_schema="public", postgres_client=psql_in_container)
 
     rows = db.executesql("SELECT count(*) FROM ewh_implemented_features")
     assert rows[0][0] == 0  # no rows, but table exists

@@ -42,6 +42,7 @@ import plumbum
 from configuraptor import Singleton, alias, asdict, postpone
 from configuraptor.errors import ConfigErrorMissingKey, IsPostponedError
 from dotenv import find_dotenv
+from plumbum.commands.base import BaseCommand
 from pydal import DAL, Field
 from pydal.objects import Table
 from tabulate import tabulate
@@ -652,7 +653,11 @@ def should_run(db: DAL, name: str) -> bool:
     return not row.installed if row else True
 
 
-def recover_database_from_backup(set_schema: Optional[str | bool] = None, config: Optional[Config] = None) -> None:
+def recover_database_from_backup(
+    set_schema: Optional[str | bool] = None,
+    config: Optional[Config] = None,
+    postgres_client: Optional[BaseCommand] = None,
+) -> None:
     """
     Recover a database backup.
 
@@ -708,7 +713,8 @@ def recover_database_from_backup(set_schema: Optional[str | bool] = None, config
 
     if is_postgres := uri.scheme.startswith("postgres"):
         # prepare the psql command
-        psql = plumbum.local["psql"][config.migrate_uri]
+        psql = postgres_client or plumbum.local["psql"]
+        psql = psql[config.migrate_uri]
         sql_consumer = psql
     else:
         filepath = uri.path
