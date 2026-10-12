@@ -10,6 +10,7 @@ from testcontainers.postgres import PostgresContainer
 from edwh_migrate import migration
 from src.edwh_migrate import (
     Config,
+    ViewMigrationManager,
     activate_migrations,
     migrate,
     recover_database_from_backup,
@@ -156,3 +157,249 @@ def test_very_long_migration_name_notice(conn_str: str, tempdir: str, capfd):
     captured = capfd.readouterr()
 
     assert "NOTICE:" not in captured.err
+
+
+def report_model_managers():
+    class Models(ViewMigrationManager):
+        uses = ()
+
+        def up(self): ...
+
+        def down(self): ...
+
+    def model_manager(table_name):
+        class Model(ViewMigrationManager):
+            uses = (Models,)
+
+            def up(self):
+                if self.db.executesql(f"SELECT to_regclass('{table_name}_backup')") == [(None,)]:
+                    return
+                self.db.executesql(f"CREATE TABLE {table_name} (id integer PRIMARY KEY)")
+                self.db.executesql(f"INSERT INTO {table_name} SELECT * FROM {table_name}_backup")
+                self.db.executesql(f"DROP TABLE {table_name}_backup")
+
+            def down(self):
+                if self.db.executesql(f"SELECT to_regclass('{table_name}')") == [(None,)]:
+                    return
+                self.db.executesql(f"CREATE TEMP TABLE {table_name}_backup AS SELECT * FROM {table_name}")
+                self.db.executesql(f"DROP TABLE {table_name}")
+
+        return Model
+
+    return Models, model_manager("item_model"), model_manager("experience_model"), model_manager("tag_model")
+
+
+def setup_report_models(config):
+    db = migrate.setup_db(config=config, migrate=True, migrate_enabled=True)
+    db.executesql("CREATE TABLE item_model (id integer PRIMARY KEY)")
+    db.executesql("INSERT INTO item_model VALUES (1)")
+    db.executesql("CREATE TABLE tag_model (id integer PRIMARY KEY)")
+    db.executesql("INSERT INTO tag_model VALUES (10)")
+    db.commit()
+    return db
+
+
+@pytest.fixture
+def report_migrations():
+    migrate.migrations.reset()
+    yield
+    migrate.migrations.reset()
+
+
+@pytest.mark.usefixtures("report_migrations")
+def test_report_replacement_on_fresh_database(conn_str: str, tempdir: str):
+    config = Config.load(dict(migrate_uri=conn_str, db_folder=tempdir))
+    db = setup_report_models(config)
+    Models, ItemModel, _, TagModel = report_model_managers()
+    rebuilt = []
+    hooks = []
+
+    class ReportV1(ViewMigrationManager):
+        uses = (ItemModel, TagModel)
+        since = "activate_item_report"
+
+        def up(self):
+            rebuilt.append("old")
+            self.db.executesql("""
+                CREATE MATERIALIZED VIEW item_report AS
+                SELECT item.id, tag.id AS tag_id, 'old'::text AS version
+                FROM item_model item
+                CROSS JOIN tag_model tag
+            """)
+
+        def down(self):
+            self.db.executesql("DROP MATERIALIZED VIEW IF EXISTS item_report")
+
+    class ReportV2(ViewMigrationManager):
+        uses = (ItemModel, TagModel)
+        replaces = ReportV1
+        since = "activate_item_report"
+
+        def up(self):
+            rebuilt.append("new")
+            self.db.executesql("""
+                CREATE MATERIALIZED VIEW item_report AS
+                SELECT item.id, tag.id AS tag_id, 'new'::text AS version
+                FROM item_model item
+                CROSS JOIN tag_model tag
+            """)
+
+        def down(self):
+            self.db.executesql("DROP MATERIALIZED VIEW IF EXISTS item_report")
+
+    assert ReportV1 in ItemModel._used_by and ReportV2 in ItemModel._used_by
+    assert ReportV1 in TagModel._used_by and ReportV2 in TagModel._used_by
+
+    class Consumer(ViewMigrationManager):
+        uses = (ReportV1,)
+        since = "activate_item_report"
+
+        def up(self):
+            self.db.executesql("CREATE VIEW item_consumer AS SELECT * FROM item_report")
+            rebuilt.append("consumer")
+
+        def down(self):
+            self.db.executesql("DROP VIEW IF EXISTS item_consumer")
+
+        def __enter__(self):
+            hooks.append("enter")
+            return super().__enter__()
+
+        def __exit__(self, exc_type, exc_value, tb):
+            hooks.append("exit")
+            return super().__exit__(exc_type, exc_value, tb)
+
+    @migrate.migration()
+    def activate_item_report(db):
+        with ItemModel(db):
+            assert db.executesql("SELECT to_regclass('item_report')") == [(None,)]
+        return True
+
+    assert migrate.activate_migrations(config=config)
+    assert db.executesql("SELECT * FROM item_report") == [(1, 10, "new")]
+    assert db.executesql("SELECT * FROM item_consumer") == [(1, 10, "new")]
+    assert rebuilt == ["new", "consumer"]
+    assert hooks == ["enter", "exit"]
+    db.commit()
+
+    @migrate.migration()
+    def rebuild_item_and_tag(db):
+        with Models(db):
+            assert db.executesql("SELECT to_regclass('item_report')") == [(None,)]
+            assert db.executesql("SELECT to_regclass('item_model'), to_regclass('tag_model')") == [(None, None)]
+        return True
+
+    assert migrate.activate_migrations(config=config)
+    assert db.executesql("SELECT * FROM item_report") == [(1, 10, "new")]
+    assert db.executesql("SELECT * FROM item_consumer") == [(1, 10, "new")]
+    assert rebuilt == ["new", "consumer", "new", "consumer"]
+    assert hooks == ["enter", "exit", "enter", "exit"]
+    db.close()
+
+
+@pytest.mark.usefixtures("report_migrations")
+def test_report_replacement_during_model_rename(conn_str: str, tempdir: str):
+    config = Config.load(dict(migrate_uri=conn_str, db_folder=tempdir))
+    db = setup_report_models(config)
+    Models, ItemModel, ExperienceModel, TagModel = report_model_managers()
+    rebuilt = []
+    hooks = []
+
+    class ReportV1(ViewMigrationManager):
+        uses = (ItemModel, TagModel)
+        since = "activate_item_report"
+        until = "rename_item_to_experience"
+
+        def up(self):
+            rebuilt.append("old")
+            self.db.executesql("""
+                CREATE MATERIALIZED VIEW item_report AS
+                SELECT item.id, tag.id AS tag_id
+                FROM item_model item
+                CROSS JOIN tag_model tag
+            """)
+
+        def down(self):
+            self.db.executesql("DROP MATERIALIZED VIEW IF EXISTS item_report")
+
+    class ReportV2(ViewMigrationManager):
+        uses = (ExperienceModel, TagModel)
+        replaces = ReportV1
+        since = "rename_item_to_experience"
+
+        def up(self):
+            rebuilt.append("new")
+            self.db.executesql("""
+                CREATE MATERIALIZED VIEW item_report AS
+                SELECT experience.id, tag.id AS tag_id
+                FROM experience_model experience
+                CROSS JOIN tag_model tag
+            """)
+
+        def down(self):
+            self.db.executesql("DROP MATERIALIZED VIEW IF EXISTS item_report")
+
+    class Consumer(ViewMigrationManager):
+        uses = (ReportV1,)
+        since = "activate_item_report"
+
+        def up(self):
+            self.db.executesql("CREATE VIEW item_consumer AS SELECT * FROM item_report")
+            rebuilt.append("consumer")
+
+        def down(self):
+            self.db.executesql("DROP VIEW IF EXISTS item_consumer")
+
+        def __enter__(self):
+            hooks.append("enter")
+            return super().__enter__()
+
+        def __exit__(self, exc_type, exc_value, tb):
+            hooks.append("exit")
+            return super().__exit__(exc_type, exc_value, tb)
+
+    ReportV1(db).up()
+    Consumer(db).up()
+    rebuilt.clear()
+    db.ewh_implemented_features.insert(name="activate_item_report", installed=True)
+    db.commit()
+
+    @migrate.migration()
+    def rename_item_to_experience(db):
+        with ExperienceModel(db):
+            assert db.executesql("SELECT to_regclass('item_report')") == [(None,)]
+            db.executesql("ALTER TABLE item_model RENAME TO experience_model")
+        return True
+
+    assert migrate.activate_migrations(config=config)
+    assert db.executesql("SELECT to_regclass('item_model')") == [(None,)]
+    assert db.executesql("SELECT * FROM item_report") == [(1, 10)]
+    assert db.executesql("SELECT * FROM item_consumer") == [(1, 10)]
+    assert rebuilt == ["new", "consumer"]
+    assert hooks == ["enter", "exit"]
+    dependencies = db.executesql("""
+        SELECT DISTINCT source.relname
+        FROM pg_rewrite rewrite
+        JOIN pg_depend dependency ON dependency.objid = rewrite.oid
+            AND dependency.classid = 'pg_rewrite'::regclass
+            AND dependency.refclassid = 'pg_class'::regclass
+        JOIN pg_class source ON source.oid = dependency.refobjid
+        WHERE rewrite.ev_class = 'item_report'::regclass AND source.relkind = 'r'
+    """)
+    assert {row[0] for row in dependencies} == {"experience_model", "tag_model"}
+    db.commit()
+
+    @migrate.migration()
+    def rebuild_experience_and_tag(db):
+        with Models(db):
+            assert db.executesql("SELECT to_regclass('item_report')") == [(None,)]
+            assert db.executesql("SELECT to_regclass('experience_model'), to_regclass('tag_model')") == [(None, None)]
+        return True
+
+    assert migrate.activate_migrations(config=config)
+    assert db.executesql("SELECT * FROM item_report") == [(1, 10)]
+    assert db.executesql("SELECT * FROM item_consumer") == [(1, 10)]
+    assert rebuilt == ["new", "consumer", "new", "consumer"]
+    assert hooks == ["enter", "exit", "enter", "exit"]
+    assert ReportV1.until == "rename_item_to_experience"
+    db.close()

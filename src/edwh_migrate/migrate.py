@@ -40,7 +40,7 @@ import configuraptor
 import dotenv
 import plumbum
 from configuraptor import Singleton, alias, asdict, postpone
-from configuraptor.errors import ConfigErrorMissingKey, IsPostponedError
+from configuraptor.errors import ConfigError, ConfigErrorMissingKey, IsPostponedError
 from dotenv import find_dotenv
 from plumbum.commands.base import BaseCommand
 from pydal import DAL, Field
@@ -55,7 +55,14 @@ try:
 except ImportError:  # pragma: no cover
     TypeDAL = DAL
 
-MigrationFn: typing.TypeAlias = typing.Callable[[DAL], bool]
+
+class MigrationFn(typing.Protocol):
+    @property
+    def __name__(self) -> str: ...
+
+    def __call__(self, db: DAL, /) -> bool: ...
+
+
 MigrationOrderingMode: typing.TypeAlias = typing.Literal["legacy", "intertwined"]
 
 # Supports both strict names like `..._20260330_001` and lenient trailing numeric
@@ -405,7 +412,7 @@ def _get_config() -> Config:
     dotenv.load_dotenv(find_dotenv(usecwd=True))
     try:
         return Config.load("pyproject.toml", key="tool.migrate")
-    except (configuraptor.errors.ConfigError, FileNotFoundError):
+    except (ConfigError, FileNotFoundError):
         return Config.from_env(load_dotenv=False)
 
 
@@ -467,7 +474,7 @@ def setup_db(
     migrate_enabled: bool = False,
     appname: str = " ".join(sys.argv),
     long_running: bool | int = False,
-    dal_class: typing.Type[T_Dal] = DAL,
+    dal_class: typing.Type[T_Dal] = ...,
     impl_feat_table_name: Optional[str] = None,
     folder: Optional[str] = None,
     config: Optional[Config] = None,
@@ -524,10 +531,10 @@ def setup_db(
     except (KeyError, ConfigErrorMissingKey, IsPostponedError) as e:
         raise InvalidConfigException("$MIGRATE_URI not found in environment.") from e
 
-    if dal_class is None:
-        # default: pydal.DAL
-        # (alternatives: py4web.core.DAL, typedal.TypeDAL, typedal.py4web.DAL)
-        dal_class = TypeDAL if config.use_typedal else DAL
+    # TypeDAL inherits DAL at runtime, although its static base is a protocol.
+    database_class = (
+        dal_class if dal_class is not None else typing.cast(type[DAL], TypeDAL if config.use_typedal else DAL)
+    )
 
     is_postgres = uri.startswith("postgres")
     driver_args: dict[str, typing.Any] = {}
@@ -536,7 +543,7 @@ def setup_db(
         if not long_running:
             driver_args["keepalives"] = 1
 
-    db = dal_class(
+    db = database_class(
         uri,
         migrate=migrate,
         migrate_enabled=migrate_enabled,
@@ -575,7 +582,7 @@ def setup_db(
 @typing.overload
 def migration(
     func: None = None,
-    requires: list[MigrationFn | str] | MigrationFn | None = None,
+    requires: list[MigrationFn | str] | MigrationFn | str | None = None,
 ) -> typing.Callable[[MigrationFn], Migration]:
     """
     Allows calling the decorator with parentheses.
@@ -589,7 +596,7 @@ def migration(
 @typing.overload
 def migration(
     func: MigrationFn,
-    requires: list[MigrationFn | str] | MigrationFn | None = None,
+    requires: list[MigrationFn | str] | MigrationFn | str | None = None,
 ) -> Migration:
     """
     Allows calling @migration without parens.
@@ -598,7 +605,7 @@ def migration(
 
 def migration(
     func: MigrationFn | None = None,
-    requires: list[MigrationFn | str] | MigrationFn | None = None,
+    requires: list[MigrationFn | str] | MigrationFn | str | None = None,
 ) -> Migration | typing.Callable[[MigrationFn], Migration]:
     """
     Decorator to register a function as a migration function.
@@ -623,7 +630,7 @@ def migration(
             required_names = [requires]
         elif callable(requires):
             # when a single requirement is given, and it is a function, take the name of the function
-            required_names = [requires.__name__]
+            required_names = [typing.cast(MigrationFn, requires).__name__]
         else:
             # if requires is not callable, then it must be a list of functions, so take the names of those functions.
             required_names = [_ if isinstance(_, str) else _.__name__ for _ in requires]
