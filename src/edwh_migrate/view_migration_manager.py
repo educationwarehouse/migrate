@@ -141,6 +141,9 @@ class ViewMigrationManager(abc.ABC):
             cache = {}
 
         self.db = db
+        self._scheduled = False
+        self._skip_down = False
+        self._ordered_instances: t.Optional[list["ViewMigrationManager"]] = None
         cache[self.__class__] = self
 
         used_by = getattr(self, "_used_by", [])
@@ -191,21 +194,36 @@ class ViewMigrationManager(abc.ABC):
         return self.check_since() and self.check_until() and not self._has_active_replacement()
 
     def _has_active_replacement(self) -> bool:
-        return any(
-            (item.check_since() and item.check_until()) or item._has_active_replacement()
-            for item in self.replacement_instances
-            if item.__class__ in self._replaced_by
-        )
+        return self._active_manager() is not self
+
+    def _active_manager(self) -> "ViewMigrationManager":
+        for item in self.replacement_instances:
+            if item.__class__ in self._replaced_by:
+                selected = item._active_manager()
+                if selected.check_since() and selected.check_until():
+                    return selected
+        return self
+
+    def _uses_replacements(self) -> bool:
+        visited = set()
+
+        def check(item):
+            if item in visited:
+                return False
+            visited.add(item)
+            return bool(item.replacement_instances) or any(check(dependent) for dependent in item.instances)
+
+        return check(self)
 
     def _migration_order(self) -> list["ViewMigrationManager"]:
         """Collect affected managers once and order dependencies before their dependents."""
         affected = {}
-        visited = set()
+        visited = {}
 
         def collect(item):
-            if item in visited:
+            if item.__class__ in visited:
                 return
-            visited.add(item)
+            visited[item.__class__] = item
             active = item.check_since() and item.check_until()
             retiring = any(
                 replacement.since == os.environ.get(CURRENT_MIGRATION)
@@ -236,6 +254,10 @@ class ViewMigrationManager(abc.ABC):
             for dependency in item.uses:
                 if dependency in affected:
                     order(affected[dependency])
+                if dependency in visited:
+                    selected = visited[dependency]._active_manager()
+                    if selected.__class__ in affected:
+                        order(selected)
             pending.remove(item)
             completed.add(item)
             ordered.append(item)
@@ -243,6 +265,17 @@ class ViewMigrationManager(abc.ABC):
         for item in affected.values():
             order(item)
         return ordered
+
+    def _run_ordered_hook(self, item, method, *args):
+        item._scheduled = True
+        try:
+            if item is self:
+                # The root's override already called into this base method.
+                getattr(ViewMigrationManager, method)(item, *args)
+            else:
+                getattr(item, method)(*args)
+        finally:
+            item._scheduled = False
 
     def check_since(self) -> bool:
         """
@@ -298,14 +331,28 @@ class ViewMigrationManager(abc.ABC):
         Returns:
             ViewMigrationManager: The current instance of the migration manager.
         """
+        if self._scheduled:
+            if not self._skip_down:
+                self.down()
+            self.may_go_up = True
+            return
+
+        if not self._uses_replacements():
+            if not self.should_run():
+                return
+            for item in reversed(self.instances):
+                item.__enter__()
+            self.down()
+            self.may_go_up = True
+            return
+
         self._ordered_instances = self._migration_order()
         retiring = {item.__class__ for item in self._ordered_instances if not item.should_run()}
         for item in reversed(self._ordered_instances):
             # The installed predecessor owns the drop at handover. Both versions may
             # target the same relation, so do not execute the replacement's drop too.
-            if item.replaces not in retiring:
-                item.down()
-            item.may_go_up = True
+            item._skip_down = item.replaces in retiring
+            self._run_ordered_hook(item, "__enter__")
 
     def __exit__(
         self,
@@ -327,7 +374,20 @@ class ViewMigrationManager(abc.ABC):
             # block failed, don't try to go up!
             return
 
+        if self._scheduled:
+            if self.may_go_up and self.should_run():
+                self.up()
+            self.may_go_up = False
+            return
+
+        if self._ordered_instances is None:
+            if not self.should_run() or not self.may_go_up:
+                return
+            self.up()
+            self.may_go_up = False
+            for item in self.instances:
+                item.__exit__(exc_type, exc_value, tb)
+            return
+
         for item in self._ordered_instances:
-            if item.may_go_up and item.should_run():
-                item.up()
-            item.may_go_up = False
+            self._run_ordered_hook(item, "__exit__", exc_type, exc_value, tb)

@@ -212,6 +212,7 @@ def test_report_replacement_on_fresh_database(conn_str: str, tempdir: str):
     db = setup_report_models(config)
     Models, ItemModel, _, TagModel = report_model_managers()
     rebuilt = []
+    hooks = []
 
     class ReportV1(ViewMigrationManager):
         uses = (ItemModel, TagModel)
@@ -249,6 +250,25 @@ def test_report_replacement_on_fresh_database(conn_str: str, tempdir: str):
     assert ReportV1 in ItemModel._used_by and ReportV2 in ItemModel._used_by
     assert ReportV1 in TagModel._used_by and ReportV2 in TagModel._used_by
 
+    class Consumer(ViewMigrationManager):
+        uses = (ReportV1,)
+        since = "activate_item_report"
+
+        def up(self):
+            self.db.executesql("CREATE VIEW item_consumer AS SELECT * FROM item_report")
+            rebuilt.append("consumer")
+
+        def down(self):
+            self.db.executesql("DROP VIEW IF EXISTS item_consumer")
+
+        def __enter__(self):
+            hooks.append("enter")
+            return super().__enter__()
+
+        def __exit__(self, exc_type, exc_value, tb):
+            hooks.append("exit")
+            return super().__exit__(exc_type, exc_value, tb)
+
     @migrate.migration()
     def activate_item_report(db):
         with ItemModel(db):
@@ -257,7 +277,9 @@ def test_report_replacement_on_fresh_database(conn_str: str, tempdir: str):
 
     assert migrate.activate_migrations(config=config)
     assert db.executesql("SELECT * FROM item_report") == [(1, 10, "new")]
-    assert rebuilt == ["new"]
+    assert db.executesql("SELECT * FROM item_consumer") == [(1, 10, "new")]
+    assert rebuilt == ["new", "consumer"]
+    assert hooks == ["enter", "exit"]
     db.commit()
 
     @migrate.migration()
@@ -269,7 +291,9 @@ def test_report_replacement_on_fresh_database(conn_str: str, tempdir: str):
 
     assert migrate.activate_migrations(config=config)
     assert db.executesql("SELECT * FROM item_report") == [(1, 10, "new")]
-    assert rebuilt == ["new", "new"]
+    assert db.executesql("SELECT * FROM item_consumer") == [(1, 10, "new")]
+    assert rebuilt == ["new", "consumer", "new", "consumer"]
+    assert hooks == ["enter", "exit", "enter", "exit"]
     db.close()
 
 
@@ -279,6 +303,7 @@ def test_report_replacement_during_model_rename(conn_str: str, tempdir: str):
     db = setup_report_models(config)
     Models, ItemModel, ExperienceModel, TagModel = report_model_managers()
     rebuilt = []
+    hooks = []
 
     class ReportV1(ViewMigrationManager):
         uses = (ItemModel, TagModel)
@@ -314,7 +339,27 @@ def test_report_replacement_during_model_rename(conn_str: str, tempdir: str):
         def down(self):
             self.db.executesql("DROP MATERIALIZED VIEW IF EXISTS item_report")
 
+    class Consumer(ViewMigrationManager):
+        uses = (ReportV1,)
+        since = "activate_item_report"
+
+        def up(self):
+            self.db.executesql("CREATE VIEW item_consumer AS SELECT * FROM item_report")
+            rebuilt.append("consumer")
+
+        def down(self):
+            self.db.executesql("DROP VIEW IF EXISTS item_consumer")
+
+        def __enter__(self):
+            hooks.append("enter")
+            return super().__enter__()
+
+        def __exit__(self, exc_type, exc_value, tb):
+            hooks.append("exit")
+            return super().__exit__(exc_type, exc_value, tb)
+
     ReportV1(db).up()
+    Consumer(db).up()
     rebuilt.clear()
     db.ewh_implemented_features.insert(name="activate_item_report", installed=True)
     db.commit()
@@ -329,7 +374,9 @@ def test_report_replacement_during_model_rename(conn_str: str, tempdir: str):
     assert migrate.activate_migrations(config=config)
     assert db.executesql("SELECT to_regclass('item_model')") == [(None,)]
     assert db.executesql("SELECT * FROM item_report") == [(1, 10)]
-    assert rebuilt == ["new"]
+    assert db.executesql("SELECT * FROM item_consumer") == [(1, 10)]
+    assert rebuilt == ["new", "consumer"]
+    assert hooks == ["enter", "exit"]
     dependencies = db.executesql("""
         SELECT DISTINCT source.relname
         FROM pg_rewrite rewrite
@@ -351,6 +398,8 @@ def test_report_replacement_during_model_rename(conn_str: str, tempdir: str):
 
     assert migrate.activate_migrations(config=config)
     assert db.executesql("SELECT * FROM item_report") == [(1, 10)]
-    assert rebuilt == ["new", "new"]
+    assert db.executesql("SELECT * FROM item_consumer") == [(1, 10)]
+    assert rebuilt == ["new", "consumer", "new", "consumer"]
+    assert hooks == ["enter", "exit", "enter", "exit"]
     assert ReportV1.until == "rename_item_to_experience"
     db.close()
