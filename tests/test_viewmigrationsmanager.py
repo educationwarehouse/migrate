@@ -1,6 +1,7 @@
 from sqlite3 import OperationalError
 
 import pytest
+from pydal import DAL
 
 from src.edwh_migrate import (
     ViewMigrationManager,
@@ -105,3 +106,37 @@ def test_resolving_manager_order(tmp_empty_sqlite_db_file, clean_migrate):
     with pytest.raises(OperationalError):
         with MyChildView2(db), MyBaseView(db), MyChildView1(db):
             ...
+
+
+def test_circular_dependencies_fail_before_dropping_views():
+    operations = []
+
+    class FirstView(ViewMigrationManager):
+        uses: tuple[type[ViewMigrationManager], ...] = ()
+
+        def up(self):
+            operations.append("first up")
+
+        def down(self):
+            operations.append("first down")
+
+    class SecondView(ViewMigrationManager):
+        uses = (FirstView,)
+
+        def up(self):
+            operations.append("second up")
+
+        def down(self):
+            operations.append("second down")
+
+    # Close the cycle after both classes exist, registering the reverse dependency.
+    FirstView.uses = (SecondView,)
+    SecondView._used_by.append(FirstView)
+
+    db = DAL("sqlite:memory")
+    try:
+        with pytest.raises(ValueError, match="Circular view migration dependencies"), FirstView(db):
+            operations.append("migration body")
+        assert operations == []
+    finally:
+        db.close()
