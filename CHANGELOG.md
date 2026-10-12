@@ -2,6 +2,11 @@
 
 <!--next-version-placeholder-->
 
+## v2.1.0 (2026-10-12)
+
+### Feature
+* **vmm:** support explicit report manager classes (#8)
+
 ## v2.0.3 (2026-09-18)
 
 ### Feature
