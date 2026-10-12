@@ -2,9 +2,9 @@ try:
     import psycopg2
     import psycopg2.errors
 
-    PostgresError = psycopg2.errors.Error
+    PostgresError = psycopg2.Error
 
-    PostgresUndefinedTable = psycopg2.errors.UndefinedTable
+    PostgresUndefinedTable = psycopg2.errors.lookup("42P01")
 
 except ImportError:  # pragma: no cover
     """

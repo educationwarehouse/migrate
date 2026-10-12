@@ -96,7 +96,7 @@ class ViewMigrationManager(abc.ABC):
 
     @abc.abstractmethod
     @classproperty
-    def uses(cls) -> t.Iterable[t.Type["ViewMigrationManager"]]:
+    def uses(cls: type["ViewMigrationManager"]) -> t.Iterable[t.Type["ViewMigrationManager"]]:
         """
         List/tuple of view migration classes that this one depends on.
         """
@@ -104,7 +104,7 @@ class ViewMigrationManager(abc.ABC):
         return ()
 
     @classproperty
-    def since(cls) -> str:
+    def since(cls: type["ViewMigrationManager"]) -> str:
         """
         Migration that must have run before this migration becomes relevant.
 
@@ -113,7 +113,7 @@ class ViewMigrationManager(abc.ABC):
         return ""
 
     @classproperty
-    def until(cls) -> str:
+    def until(cls: type["ViewMigrationManager"]) -> str:
         """
         Migration after which this class should no longer be used.
 
@@ -289,8 +289,8 @@ class ViewMigrationManager(abc.ABC):
         if os.environ[CURRENT_MIGRATION] == since:
             return True
 
-        query = db.ewh_implemented_features.name == since
-        query &= db.ewh_implemented_features.installed == True
+        query = db.ewh_implemented_features["name"] == since
+        query &= db.ewh_implemented_features["installed"] == True
 
         return db(query).count() > 0
 
@@ -303,8 +303,8 @@ class ViewMigrationManager(abc.ABC):
         if not (until := self.until):
             return True
 
-        query = db.ewh_implemented_features.name == until
-        query &= db.ewh_implemented_features.installed == True
+        query = db.ewh_implemented_features["name"] == until
+        query &= db.ewh_implemented_features["installed"] == True
 
         return db(query).count() == 0
 

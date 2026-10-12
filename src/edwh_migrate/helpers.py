@@ -3,7 +3,7 @@ import typing
 T = typing.TypeVar("T")
 
 
-class classproperty:
+class classproperty(typing.Generic[T]):
     def __init__(self, fget: typing.Callable[[typing.Type[T]], typing.Any]) -> None:
         """
         Initialize the classproperty.
