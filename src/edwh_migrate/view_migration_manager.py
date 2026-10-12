@@ -28,6 +28,8 @@ class ViewMigrationManager(abc.ABC):
     Attributes:
         uses (list[typing.Type["ViewMigrationManager"]]): A list of other ViewMigrationManager classes
             that the current class depends on.
+        replaces: The previous manager for this view. Once this manager is active, the previous
+            manager is no longer rebuilt, including during the activation migration.
 
     Example:
         1. Define a subclass that implements specific migration logic:
@@ -123,6 +125,8 @@ class ViewMigrationManager(abc.ABC):
 
     # note: manually setting `used_by` is deprecated!
     _used_by: list[t.Type["ViewMigrationManager"]]
+    _replaced_by: list[t.Type["ViewMigrationManager"]]
+    replaces: t.Optional[t.Type["ViewMigrationManager"]] = None
 
     may_go_up = False
 
@@ -137,6 +141,7 @@ class ViewMigrationManager(abc.ABC):
             cache = {}
 
         self.db = db
+        cache[self.__class__] = self
 
         used_by = getattr(self, "_used_by", [])
 
@@ -155,8 +160,17 @@ class ViewMigrationManager(abc.ABC):
             instances.append(i)
 
         self.instances = instances
+        related = list(self._replaced_by)
+        if self.replaces is not None:
+            related.append(self.replaces)
+        self.replacement_instances = []
+        for cls in related:
+            if cls not in cache:
+                cache[cls] = cls(db, cache)
+            self.replacement_instances.append(cache[cls])
 
     def __init_subclass__(cls) -> None:
+        cls._replaced_by = []
         if not hasattr(cls, "_used_by"):
             # note: this has to be created here,
             # otherwise 'used_by' is a shared reference between all subclasses!!!
@@ -167,12 +181,68 @@ class ViewMigrationManager(abc.ABC):
 
         for dependency_cls in dependencies:
             dependency_cls._used_by.append(cls)
+        if cls.replaces is not None:
+            cls.replaces._replaced_by.append(cls)
 
     def should_run(self) -> bool:
         """
         Perform checks to know whether this dependency is active.
         """
-        return self.check_since() and self.check_until()
+        return self.check_since() and self.check_until() and not self._has_active_replacement()
+
+    def _has_active_replacement(self) -> bool:
+        return any(
+            (item.check_since() and item.check_until()) or item._has_active_replacement()
+            for item in self.replacement_instances
+            if item.__class__ in self._replaced_by
+        )
+
+    def _migration_order(self) -> list["ViewMigrationManager"]:
+        """Collect affected managers once and order dependencies before their dependents."""
+        affected = {}
+        visited = set()
+
+        def collect(item):
+            if item in visited:
+                return
+            visited.add(item)
+            active = item.check_since() and item.check_until()
+            retiring = any(
+                replacement.since == os.environ.get(CURRENT_MIGRATION)
+                and replacement.check_since()
+                and replacement.check_until()
+                for replacement in item.replacement_instances
+                if replacement.__class__ in item._replaced_by
+            )
+            if active and (item.should_run() or retiring):
+                affected[item.__class__] = item
+            if active or item._has_active_replacement():
+                for dependent in item.instances:
+                    collect(dependent)
+            for related in item.replacement_instances:
+                collect(related)
+
+        collect(self)
+        ordered = []
+        pending = set()
+        completed = set()
+
+        def order(item):
+            if item in completed:
+                return
+            if item in pending:
+                raise ValueError("Circular view migration dependencies")
+            pending.add(item)
+            for dependency in item.uses:
+                if dependency in affected:
+                    order(affected[dependency])
+            pending.remove(item)
+            completed.add(item)
+            ordered.append(item)
+
+        for item in affected.values():
+            order(item)
+        return ordered
 
     def check_since(self) -> bool:
         """
@@ -228,14 +298,14 @@ class ViewMigrationManager(abc.ABC):
         Returns:
             ViewMigrationManager: The current instance of the migration manager.
         """
-        if not self.should_run():
-            return
-
-        for item in reversed(self.instances):
-            item.__enter__()
-
-        self.down()
-        self.may_go_up = True
+        self._ordered_instances = self._migration_order()
+        retiring = {item.__class__ for item in self._ordered_instances if not item.should_run()}
+        for item in reversed(self._ordered_instances):
+            # The installed predecessor owns the drop at handover. Both versions may
+            # target the same relation, so do not execute the replacement's drop too.
+            if item.replaces not in retiring:
+                item.down()
+            item.may_go_up = True
 
     def __exit__(
         self,
@@ -257,15 +327,7 @@ class ViewMigrationManager(abc.ABC):
             # block failed, don't try to go up!
             return
 
-        if not self.should_run():
-            return
-
-        if not self.may_go_up:
-            # didn't go down properly or already executed!
-            return
-
-        self.up()
-        self.may_go_up = False
-
-        for item in self.instances:
-            item.__exit__(exc_type, exc_value, tb)
+        for item in self._ordered_instances:
+            if item.may_go_up and item.should_run():
+                item.up()
+            item.may_go_up = False
